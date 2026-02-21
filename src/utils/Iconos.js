@@ -1,0 +1,23 @@
+export const ICONOS_MULTIMEDIA = {
+  mov: 'lets-icons:video-light',
+  'video/quicktime': 'lets-icons:video-light',
+  flv: 'lets-icons:video-light',
+  'video/x-flv': 'lets-icons:video-light',
+  mp4: 'lets-icons:video-light',
+  'video/mp4': 'lets-icons:video-light',
+  mpg: 'lets-icons:video-light',
+  'video/mpeg': 'lets-icons:video-light',
+  mpeg: 'lets-icons:video-light',
+  'video/mpeg': 'lets-icons:video-light',
+  wmv: 'lets-icons:video-light',
+  'video/x-ms-wmv': 'lets-icons:video-light',
+  pdf: 'fa6-regular:file-pdf',
+  'application/pdf': 'fa6-regular:file-pdf',
+  xls: 'uiw:file-excel',
+  'application/vnd.ms-excel': 'uiw:file-excel',
+  xlsx: 'uiw:file-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'uiw:file-excel',
+  xlsm: 'uiw:file-excel',
+  'application/vnd.ms-excel.sheet.macroEnabled.12': 'uiw:file-excel',
+  mp3: 'teenyicons:mp3-outline'
+}

@@ -1,0 +1,49 @@
+## npm
+yarn.lock
+settings.json
+# Dependencies
+/node_modules
+package-lock.json
+/.pnp
+.pnp.js
+
+# Testing
+/coverage
+
+# Next.js
+/out/
+.next/cache/*
+.next
+
+# production
+/build
+/.github/workflows/pipeline.bk
+
+# Misc
+.DS_Store
+*.pem
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+
+# Python
+*/__pycache__/
+*.pyc
+FastAPI/
+!FastAPI/**
+.env.local
+.env
+.env.dev
+.vscode/settings.json
+.vscode
+can.json
+
+i18n_Config.txt

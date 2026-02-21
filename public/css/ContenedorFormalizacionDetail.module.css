@@ -1,0 +1,140 @@
+.card {
+  position: absolute;
+  top: 0px;
+  left: 0px;
+  border-radius: 15px 0px 0px 0px;
+  background-color: #b690e6ff;
+  width: 168px;
+  height: 38px;
+}
+.checkbox {
+  position: absolute;
+  top: 102px;
+  left: 102px;
+  width: 168px;
+  height: 38px;
+}
+.marketingAutomation {
+  position: absolute;
+  top: 105px;
+  left: 113px;
+  letter-spacing: 0.15px;
+  line-height: 32px;
+  font-weight: 500;
+  display: inline-block;
+}
+.marketingAutomation1 {
+  align-self: stretch;
+  position: relative;
+  letter-spacing: 0.15px;
+  line-height: 28px;
+}
+.paragraphContainer {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 0px 0px 2px;
+}
+.buttonContainer1 {
+  position: absolute;
+  top: 43px;
+  left: 11px;
+  width: 265px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  font-size: 24px;
+  color: rgba(76, 78, 100, 0.9);
+}
+.avatar {
+  width: 24px;
+  border-radius: 64px;
+  background-color: #606a7c;
+  height: 24px;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: none;
+}
+.finalizado {
+  position: relative;
+  letter-spacing: 0.16px;
+  line-height: 18px;
+}
+.typography {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 3px 6px;
+}
+.cancel {
+  width: 24px;
+  position: relative;
+  height: 24px;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: none;
+  opacity: 0.7;
+}
+.container {
+  position: absolute;
+  height: 22.86%;
+  width: 30.37%;
+  top: 4%;
+  right: 65.56%;
+  bottom: 73.14%;
+  left: 4.07%;
+  border-radius: 16px;
+  background-color: #54bd0f;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 4px;
+  box-sizing: border-box;
+  font-size: 13px;
+}
+.buttonContainer {
+  width: 270px;
+  position: relative;
+  border-radius: 10px;
+  background-color: #fff;
+  height: 140px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.contenedorFormalizacionDetail {
+  width: 270px;
+  position: relative;
+  box-shadow: 0px 2px 10px rgba(0, 0, 0, 0.25);
+  height: 140px;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: flex-start;
+  text-align: left;
+  font-size: 20px;
+  color: #fff;
+  border-radius: 15px 15px 15px 15px;
+}
+
+.buttonContainer:hover {
+  transition: 0.3s;
+  background-color: #b690e6ff !important;
+  color: #fff;
+}
+
+.buttonContainer:hover .hover_text {
+  color: white !important;
+}
+
+.buttonContainer:hover .card {
+  background-color: white !important;
+}
+
+.buttonContainer:hover .marketingAutomation {
+  color: #b690e6ff !important;
+}
