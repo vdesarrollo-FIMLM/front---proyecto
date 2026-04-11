@@ -249,8 +249,17 @@ const handleSearch = async () => {
 }
 
   const handleUpdateCantidadKit = (index, nuevaCantidad) => {
-  const cantidad = parseInt(nuevaCantidad) || 1
-  if (cantidad > 0) {
+  // Permitir string vacío
+  if (nuevaCantidad === '') {
+    setProductosKit(prev =>
+      prev.map((p, i) => i === index ? { ...p, cantidad_por_kit: '' } : p)
+    )
+    return
+  }
+  
+  // Validar que sea número positivo
+  const cantidad = parseInt(nuevaCantidad, 10)
+  if (!isNaN(cantidad) && cantidad > 0) {
     setProductosKit(prev =>
       prev.map((p, i) => i === index ? { ...p, cantidad_por_kit: cantidad } : p)
     )
@@ -713,8 +722,15 @@ const handleGuardarEdicion = async () => {
 // ACTUALIZAR CANTIDAD EN KIT DURANTE EDICIÓN
 // ==========================================
 const handleEditUpdateCantidadKit = (index, nuevaCantidad) => {
-  const cantidad = parseInt(nuevaCantidad) || 1
-  if (cantidad > 0) {
+  if (nuevaCantidad === '') {
+    const nuevosProductos = [...editProductosKit]
+    nuevosProductos[index].cantidad_por_kit = ''
+    setEditProductosKit(nuevosProductos)
+    return
+  }
+  
+  const cantidad = parseInt(nuevaCantidad, 10)
+  if (!isNaN(cantidad) && cantidad > 0) {
     const nuevosProductos = [...editProductosKit]
     nuevosProductos[index].cantidad_por_kit = cantidad
     nuevosProductos[index].cantidad_total = cantidad * editCantidad
@@ -1074,16 +1090,29 @@ const handleVerDetallePendiente = (item) => {
                     </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <TextField
-                        type="number"
-                        size="small"
-                        value={producto.cantidad_por_kit}
-                        onChange={(e) => handleUpdateCantidadKit(index, e.target.value)}
-                        sx={{ width: 80 }}
-                        inputProps={{ min: 1 }}
-                      />
-                      <Typography variant="body2">unid/kit</Typography>
-                      <IconButton size="small" color="error" onClick={() => handleRemoveProductoKit(index)}>
-                        <DeleteIcon />
+                        type="text"  // Cambiado de "number" a "text"
+        size="small"
+        value={producto.cantidad_por_kit}
+        onChange={(e) => handleUpdateCantidadKit(index, e.target.value)}
+        onBlur={() => {
+          // Si queda vacío o es 0, poner 1
+          if (!producto.cantidad_por_kit || producto.cantidad_por_kit === 0 || producto.cantidad_por_kit === '') {
+            setProductosKit(prev =>
+              prev.map((p, i) => i === index ? { ...p, cantidad_por_kit: 1 } : p)
+            )
+          }
+        }}
+        sx={{ width: 80 }}
+        InputProps={{
+          inputProps: { 
+            inputMode: 'numeric',
+            pattern: '[0-9]*',
+            style: { textAlign: 'center' }
+          }
+        }}
+      />
+      <Typography variant="body2">unid/kit</Typography>
+      <IconButton size="small" color="error" onClick={() => handleRemoveProductoKit(index)}>
                       </IconButton>
                     </Box>
                   </Box>
@@ -1119,31 +1148,19 @@ const handleVerDetallePendiente = (item) => {
       fullWidth
       type="number"
       label="Cantidad *"
-      value={formData.cantidad === 0 ? '' : formData.cantidad}
-      onChange={(e) => {
-        const value = e.target.value
-        // Permitir vacío temporalmente para que el usuario pueda escribir
-        if (value === '') {
-          setFormData(prev => ({ ...prev, cantidad: '' }))
-        } else {
-          const numValue = parseInt(value, 10)
-          if (!isNaN(numValue) && numValue > 0) {
-            setFormData(prev => ({ ...prev, cantidad: numValue }))
-          }
-        }
-      }}
-      onBlur={() => {
-        // Al salir del campo, si está vacío o inválido, poner 1
-        if (!formData.cantidad || formData.cantidad <= 0) {
-          setFormData(prev => ({ ...prev, cantidad: 1 }))
-        }
-      }}
-      inputProps={{ 
-        min: 1, 
-        step: 1,
-        // Esto evita que el navegador muestre el spinner que causa problemas
-        style: { appearance: 'textfield', MozAppearance: 'textfield' }
-      }}
+      value={formData.cantidad} // Quitamos la condición ternaria que tenías
+  onChange={(e) => {
+    const value = e.target.value;
+    // Permitimos que quede vacío temporalmente, de lo contrario lo convertimos a número
+    setFormData(prev => ({ ...prev, cantidad: value === '' ? '' : Number(value) }));
+  }}
+  onBlur={() => {
+    // Cuando el usuario hace clic por fuera, si está vacío o es 0, lo devolvemos a 1
+    if (!formData.cantidad || formData.cantidad <= 0) {
+      setFormData(prev => ({ ...prev, cantidad: 1 }));
+    }
+  }}
+  inputProps={{ min: 1, step: 1 }}
       error={!stockCheck.valido}
       helperText={!stockCheck.valido ? stockCheck.mensaje : `Stock disponible: ${productoSeleccionado?.stock_actual || 0}`}
                   />
@@ -1166,9 +1183,9 @@ const handleVerDetallePendiente = (item) => {
         fullWidth
         type="number"
         label="Cantidad de Kits *"
-        value={formData.cantidadKits}
-    onChange={(e) => {
-      const value = e.target.value
+         value={formData.cantidadKits === 0 ? '' : formData.cantidadKits}
+        onChange={(e) => {
+          const value = e.target.value
           if (value === '') {
             setFormData(prev => ({ ...prev, cantidadKits: '' }))
           } else {
@@ -1543,9 +1560,28 @@ const handleVerDetallePendiente = (item) => {
                     fullWidth
                     type="number"
                     label={editandoSalida.tipo === 'kit' ? "Cantidad de Kits" : "Cantidad"}
-                    value={editCantidad}
-                    onChange={(e) => setEditCantidad(parseInt(e.target.value) || 1)}
-                    inputProps={{ min: 1 }}
+                    value={editCantidad === 0 ? '' : editCantidad}
+    onChange={(e) => {
+      const value = e.target.value
+      if (value === '') {
+        setEditCantidad('')
+      } else {
+        const numValue = parseInt(value, 10)
+        if (!isNaN(numValue) && numValue > 0) {
+          setEditCantidad(numValue)
+        }
+      }
+    }}
+    onBlur={() => {
+      if (!editCantidad || editCantidad <= 0) {
+        setEditCantidad(1)
+      }
+    }}
+    inputProps={{ 
+      min: 1, 
+      step: 1,
+      style: { appearance: 'textfield', MozAppearance: 'textfield' }
+    }}
                   />
                 </Grid>
                 
@@ -1560,16 +1596,45 @@ const handleVerDetallePendiente = (item) => {
                         </Box>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <TextField
-                            type="number"
-                            size="small"
-                            value={producto.cantidad_por_kit}
-                            onChange={(e) => handleEditUpdateCantidadKit(idx, e.target.value)}
-                            sx={{ width: 80 }}
-                            inputProps={{ min: 1 }}
-                          />
-                          <Typography variant="body2">unid/kit</Typography>
-                          <IconButton size="small" color="error" onClick={() => handleEditRemoveProductoKit(idx)}>
-                            <DeleteIcon />
+                            type="text"  // Cambiado de "number" a "text"
+            size="small"
+            value={producto.cantidad_por_kit}
+            onChange={(e) => {
+              const value = e.target.value
+              if (value === '') {
+                const nuevosProductos = [...editProductosKit]
+                nuevosProductos[idx].cantidad_por_kit = ''
+                setEditProductosKit(nuevosProductos)
+              } else if (/^\d+$/.test(value)) {
+                const numValue = parseInt(value, 10)
+                if (numValue > 0) {
+                  const nuevosProductos = [...editProductosKit]
+                  nuevosProductos[idx].cantidad_por_kit = numValue
+                  nuevosProductos[idx].cantidad_total = numValue * editCantidad
+                  setEditProductosKit(nuevosProductos)
+                }
+              }
+            }}
+            onBlur={() => {
+              if (!producto.cantidad_por_kit || producto.cantidad_por_kit === 0 || producto.cantidad_por_kit === '') {
+                const nuevosProductos = [...editProductosKit]
+                nuevosProductos[idx].cantidad_por_kit = 1
+                nuevosProductos[idx].cantidad_total = 1 * editCantidad
+                setEditProductosKit(nuevosProductos)
+              }
+            }}
+            sx={{ width: 80 }}
+            InputProps={{
+              inputProps: { 
+                inputMode: 'numeric',
+                pattern: '[0-9]*',
+                style: { textAlign: 'center' }
+              }
+            }}
+          />
+          <Typography variant="body2">unid/kit</Typography>
+          <IconButton size="small" color="error" onClick={() => handleEditRemoveProductoKit(idx)}>
+            <DeleteIcon />
                           </IconButton>
                         </Box>
                       </Box>
