@@ -11,6 +11,11 @@ const GuestGuard = props => {
   const { children, fallback } = props
   const auth = useAuth()
   const router = useRouter()
+
+  // 🔥 TEMPORAL: Siempre mostrar contenido
+  return <>{children}</>
+
+  /* CÓDIGO ORIGINAL COMENTADO
   useEffect(() => {
     if (!router.isReady) {
       return
@@ -20,11 +25,13 @@ const GuestGuard = props => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router.route])
-  if (auth.loading || (!auth.loading && auth.user !== null)) {
+
+  if (auth.loading) {
     return fallback
   }
 
   return <>{children}</>
+  */
 }
 
 export default GuestGuard

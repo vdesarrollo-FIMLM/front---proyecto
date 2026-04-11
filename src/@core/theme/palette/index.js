@@ -1,11 +1,14 @@
-import { defaultBlackColor } from '@iconify/tools/lib/colors/attribs'
-
 const DefaultPalette = (mode, skin) => {
   // ** Vars
   const whiteColor = '#FFF'
   const lightColor = '76, 78, 100'
   const darkColor = '234, 234, 255'
   const mainColor = mode === 'light' ? lightColor : darkColor
+
+  // ✅ Convertir a formato RGB válido para Material-UI
+  const lightColorRgb = `rgb(${lightColor})`
+  const darkColorRgb = `rgb(${darkColor})`
+  const mainColorRgb = `rgb(${mainColor})`
 
   const defaultBgColor = () => {
     if (skin === 'bordered' && mode === 'light') {
@@ -19,9 +22,9 @@ const DefaultPalette = (mode, skin) => {
 
   return {
     customColors: {
-      dark: darkColor,
-      main: mainColor,
-      light: lightColor,
+      dark: darkColorRgb,      // ✅ Usar formato RGB
+      main: mainColorRgb,      // ✅ Usar formato RGB
+      light: lightColorRgb,    // ✅ Usar formato RGB
       darkBg: '#282A42',
       grayBg: '#F7F7F9',
       lightBg: '#FFFFFF',
@@ -89,24 +92,18 @@ const DefaultPalette = (mode, skin) => {
       dark: '#64C623',
       contrastText: whiteColor
     },
-
     home_economico: {
       light: '#53C4B8',
       main: '#12A192',
       dark: '#0D7B75',
       contrastText: whiteColor
     },
-
     home_: {
       light: '#3c569b',
       main: '#0C2D83',
       dark: '#092468',
       contrastText: whiteColor
     },
-
-    // Colores logo
-
-    // azulclaro
     azulClaroLogo: {
       light: '#4da1c6',
       main: '#14719f',
@@ -114,8 +111,6 @@ const DefaultPalette = (mode, skin) => {
       mainOpacity80: '#e7eaf3',
       contrastText: whiteColor
     },
-
-    // azuloscuro
     azulOscuroLogo: {
       light: '#3d7a99',
       main: '#00456a',
@@ -123,15 +118,12 @@ const DefaultPalette = (mode, skin) => {
       mainOpacity80: '#e7eaf3',
       contrastText: whiteColor
     },
-
     home_mi_nueva_familia: {
       light: '#f6d7ffff',
       main: '#b690e6ff',
       dark: '#2e1342ff',
       contrastText: whiteColor
     },
-
-    /** Prioridades */
     baja: {
       main: '#0D47A1',
       contrastText: whiteColor
@@ -152,22 +144,18 @@ const DefaultPalette = (mode, skin) => {
       main: '#2ecc71',
       contrastText: whiteColor
     },
-
     standbycolor: {
       main: '#ff5900',
       contrastText: whiteColor
     },
-
     pendienteProgramar: {
       main: '#ffbf00',
       contrastText: whiteColor
     },
-
     finalizado: {
       main: '#209227',
       contrastText: whiteColor
     },
-
     grey: {
       50: '#FAFAFA',
       100: '#F5F5F5',

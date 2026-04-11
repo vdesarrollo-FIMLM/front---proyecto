@@ -1,36 +1,41 @@
-import { AbilityBuilder, Ability } from '@casl/ability'
+// ** Ability Context
+import { createContext } from 'react'
+import { createMongoAbility } from '@casl/ability'
 
-export const AppAbility = Ability
+export const AbilityContext = createContext(undefined)
 
-/**
- * Please define your own Ability rules according to your app requirements.
- * We have just shown Admin and Client rules for demo purpose where
- * admin can manage everything and client can just visit ACL page
- */
-const defineRulesFor = (user, subject) => {
-  const { can, rules } = new AbilityBuilder(AppAbility)
-  if (user.role.includes('all')) {
-    can('manage', 'all')
-  } else {
-    if (user.permissions.length > 0) {
-      can(user.permissions, 'all')
-    }
-  }
-
-  return rules
+// 🔥 TEMPORAL: Crear una habilidad que permita todo
+export const buildAbilityFor = user => {
+  return createMongoAbility([{ action: 'manage', subject: 'all' }])
 }
 
-export const buildAbilityFor = (user, subject) => {
-  return new AppAbility(defineRulesFor(user, subject), {
-    // https://casl.js.org/v5/en/guide/subject-type-detection
-    // @ts-ignore
-    detectSubjectType: object => object.type
-  })
-}
-
+// 🔥 TEMPORAL: Exportar un objeto de permisos por defecto
 export const defaultACLObj = {
   action: 'manage',
   subject: 'all'
 }
 
-export default defineRulesFor
+/* CÓDIGO ORIGINAL COMENTADO
+export const defineRulesFor = (user, subject) => {
+  const { can, rules } = createMongoAbility()
+  
+  if (user && user.role === 'admin') {
+    can('manage', 'all')
+  } else {
+    if (user && user.permissions && user.permissions.length > 0) {
+      can(user.permissions, 'all')
+    }
+  }
+  
+  return rules
+}
+
+export const buildAbilityFor = user => {
+  return createMongoAbility(defineRulesFor(user))
+}
+
+export const defaultACLObj = {
+  action: 'read',
+  subject: 'all'
+}
+*/

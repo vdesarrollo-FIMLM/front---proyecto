@@ -14,6 +14,10 @@ const AuthGuard = props => {
   const auth = useAuth()
   const router = useRouter()
 
+  // 🔥 TEMPORAL: Desactivar autenticación para pruebas
+  return <>{children}</>
+
+  /* CÓDIGO ORIGINAL COMENTADO
   useEffect(
     () => {
       if (!router.isReady) {
@@ -42,6 +46,7 @@ const AuthGuard = props => {
   }
 
   return <>{children}</>
+  */
 }
 
 export default AuthGuard
