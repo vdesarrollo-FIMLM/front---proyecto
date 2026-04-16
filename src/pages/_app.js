@@ -12,7 +12,6 @@ import NProgress from 'nprogress'
 import { CacheProvider } from '@emotion/react'
 
 // ** Config Imports
-
 import { defaultACLObj } from 'src/configs/acl'
 import themeConfig from 'src/configs/themeConfig'
 
@@ -79,8 +78,8 @@ const Guard = ({ children, authGuard, guestGuard }) => {
   }
 }
 
-// ** Configure JSS & ClassName
-const App = props => {
+// ✅ CORREGIDO: Cambiar de "App" a "MyApp"
+const MyApp = props => {
   const { Component, emotionCache = clientSideEmotionCache, pageProps } = props
 
   // Variables
@@ -129,4 +128,4 @@ const App = props => {
   )
 }
 
-export default App
+export default MyApp

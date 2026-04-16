@@ -46,8 +46,11 @@ import {
 } from '@mui/icons-material'
 import { entradasService } from 'src/services/inventario/entradas.service'
 import QRScannerModal from './components/QRScannerModal'
+import { useAuth } from 'src/hooks/useAuth'
 
 const EntradaView = () => {
+  const { user, hasPermission } = useAuth()
+  const isSuperAdmin = user?.rol === 'super_admin'
   // Estado principal
   const [productosSeleccionados, setProductosSeleccionados] = useState([])
   const [entradasPendientes, setEntradasPendientes] = useState([])
@@ -456,9 +459,9 @@ const handleRegistrarEntradas = async () => {
                 {searchResults.map((producto) => (
                   <ListItem
                     key={producto.id}
-                    button
+                    component="div" 
                     onClick={() => handleSelectProduct(producto)}
-                    sx={{ '&:hover': { bgcolor: 'action.hover' } }}
+                    sx={{ '&:hover': { bgcolor: 'action.hover' }, cursor: 'pointer' }}
                   >
                     <ListItemText
                       primary={producto.nombre}
@@ -488,7 +491,7 @@ const handleRegistrarEntradas = async () => {
                 {productosSeleccionados.map((producto, index) => (
                   <Box key={index} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, p: 1, bgcolor: 'white', borderRadius: 1 }}>
                     <Box sx={{ flex: 1 }}>
-                      <Typography variant="body2" fontWeight="medium">{producto.nombre}</Typography>
+                      <Typography variant="body2" fontWeight="medium">{producto.producto_nombre}</Typography>
                       <Typography variant="caption" color="text.secondary">{producto.codigo}</Typography>
                     </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -719,9 +722,9 @@ const handleRegistrarEntradas = async () => {
                       color="success"
                       startIcon={loading ? <CircularProgress size={20} /> : <SaveIcon />}
                       onClick={handleRegistrarEntradas}
-                      disabled={entradasPendientes.length === 0 || loading}
+                      disabled={entradasPendientes.length === 0 || loading || !isSuperAdmin}
                     >
-                      {loading ? 'Registrando...' : 'Registrar Entradas'}
+                      {loading ? 'Registrando...' : 'Registrar Entradas (Solo Super Admin)'}
                     </Button>
                   </Box>
                 </Box>

@@ -36,6 +36,7 @@ import {
 } from '@mui/icons-material'
 import { excelService } from 'src/services/inventario/excel.service'
 import FileDropzone from './components/FileDropzone'
+import { useAuth } from 'src/hooks/useAuth'
 
 const CargarExcelView = () => {
   const router = useRouter()

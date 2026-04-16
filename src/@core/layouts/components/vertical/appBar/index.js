@@ -6,6 +6,8 @@ import MuiToolbar from '@mui/material/Toolbar'
 
 // ** Util Import
 import { hexToRGBA } from 'src/@core/utils/hex-to-rgba'
+import { Box, Chip, Typography } from '@mui/material'
+import { useAuth } from 'src/hooks/useAuth'
 
 const AppBar = styled(MuiAppBar)(({ theme }) => ({
   transition: 'none',
@@ -84,4 +86,42 @@ const LayoutAppBar = props => {
   )
 }
 
-export default LayoutAppBar
+const AppBarContent = props => {
+  const { user } = useAuth()
+  
+  const getRolColor = () => {
+    switch (user?.rol) {
+      case 'super_admin': return 'error'
+      case 'admin': return 'warning'
+      default: return 'info'
+    }
+  }
+  
+  const getRolLabel = () => {
+    switch (user?.rol) {
+      case 'super_admin': return 'Super Admin'
+      case 'admin': return 'Administrador'
+      default: return 'Operativo'
+    }
+  }
+
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+      {user && (
+        <>
+          <Chip
+            label={getRolLabel()}
+            color={getRolColor()}
+            size="small"
+            sx={{ fontWeight: 'bold' }}
+          />
+          <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+            {user?.username}
+          </Typography>
+        </>
+      )}
+    </Box>
+  )
+}
+
+export default AppBarContent

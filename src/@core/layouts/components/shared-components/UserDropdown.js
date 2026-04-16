@@ -1,9 +1,8 @@
-// ** React Imports
-import { useState, Fragment, useEffect } from 'react'
+// src/@core/layouts/components/shared-components/UserDropdown.js
+import { useState, Fragment } from 'react'
 
 // ** Next Import
 import { useRouter } from 'next/router'
-import Link from 'next/link'
 
 // ** MUI Imports
 import Box from '@mui/material/Box'
@@ -14,13 +13,13 @@ import Divider from '@mui/material/Divider'
 import MenuItem from '@mui/material/MenuItem'
 import { styled } from '@mui/material/styles'
 import Typography from '@mui/material/Typography'
+import Chip from '@mui/material/Chip'
 
 // ** Icon Imports
 import Icon from 'src/@core/components/icon'
 
 // ** Context
 import { useAuth } from 'src/hooks/useAuth'
-import { getImagen } from 'src/api/utilidades'
 
 import { useTranslation } from 'react-i18next'
 
@@ -35,33 +34,39 @@ const BadgeContentSpan = styled('span')(({ theme }) => ({
 
 const UserDropdown = props => {
   // ** Props
-  const { settings } = props
-  const [fotoPerfil, setFotoPerfil] = useState(null)
+   const { settings = {} } = props
   const [anchorEl, setAnchorEl] = useState(null)
 
   // ** Hooks
   const router = useRouter()
   const { t, i18n } = useTranslation()
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
 
   // ** Vars
-  const { direction } = settings
+  const { direction = 'ltr' } = settings
 
-  useEffect(() => {
-    if (user.foto != null) {
-      handleGetImagen(user.foto)
+  // Función para obtener color según el rol
+  const getRolColor = () => {
+    switch (user?.rol) {
+      case 'super_admin': return 'error'
+      case 'admin': return 'warning'
+      default: return 'info'
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }
 
-  const handleGetImagen = async idFoto => {
-    try {
-      const result = await getImagen(idFoto)
-      setFotoPerfil(result)
-    } catch (error) {
-      console.error('Error fetching image', error)
-      setFotoPerfil(null)
+  // Función para obtener nombre del rol
+  const getRolLabel = () => {
+    switch (user?.rol) {
+      case 'super_admin': return 'Super Administrador'
+      case 'admin': return 'Administrador'
+      default: return 'Operativo'
     }
+  }
+
+  // Obtener iniciales del usuario
+  const getInitials = () => {
+    const username = user?.username || 'U'
+    return username.substring(0, 2).toUpperCase()
   }
 
   const handleDropdownOpen = event => {
@@ -75,47 +80,13 @@ const UserDropdown = props => {
     setAnchorEl(null)
   }
 
-  const translateRelationship = name => {
-    if (i18n.language !== 'es') {
-      if (name?.includes('Hno.')) {
-        return name?.replace('Hno.', t('Hno.'))
-      } else if (name?.includes('Hna.')) {
-        return name?.replace('Hna.', t('Hna.'))
-      }
-
-      return name
-    } else {
-      return name
-    }
-  }
-
-  const [translatedName, setTranslatedName] = useState(translateRelationship(user.nombre))
-  const [translatedFullName, setTranslatedFullName] = useState(translateRelationship(user.fullname))
-
-  const styles = {
-    py: 2,
-    px: 4,
-    width: '100%',
-    display: 'flex',
-    alignItems: 'center',
-    color: 'text.primary',
-    textDecoration: 'none',
-    '& svg': {
-      mr: 2,
-      fontSize: '1.375rem',
-      color: 'text.primary'
-    }
-  }
-
   const handleLogout = () => {
+    logout()
     handleDropdownClose()
   }
 
-  useEffect(() => {
-    setTranslatedName(translateRelationship(user.nombre))
-    setTranslatedFullName(translateRelationship(user.fullname))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [i18n.language])
+  // Si no hay usuario, no mostrar nada
+  if (!user) return null
 
   return (
     <Fragment>
@@ -131,16 +102,16 @@ const UserDropdown = props => {
       >
         <Avatar
           onClick={handleDropdownOpen}
-          sx={{ width: 40, height: 40 }}
-          alt={`${translatedName}`}
-          src={`data:image/jpeg;base64,${fotoPerfil}`}
-        />
+          sx={{ width: 40, height: 40, bgcolor: 'secondary.main' }}
+        >
+          {getInitials()}
+        </Avatar>
       </Badge>
       <Menu
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}
         onClose={() => handleDropdownClose()}
-        sx={{ '& .MuiMenu-paper': { width: 230, mt: 4 } }}
+        sx={{ '& .MuiMenu-paper': { width: 280, mt: 4 } }}
         anchorOrigin={{ vertical: 'bottom', horizontal: direction === 'ltr' ? 'right' : 'left' }}
         transformOrigin={{ vertical: 'top', horizontal: direction === 'ltr' ? 'right' : 'left' }}
       >
@@ -154,26 +125,58 @@ const UserDropdown = props => {
                 horizontal: 'right'
               }}
             >
-              <Avatar
-                alt={`${translatedName}`}
-                src={`data:image/jpeg;base64,${fotoPerfil}`}
-                sx={{ width: '2.5rem', height: '2.5rem' }}
-              />
+              <Avatar sx={{ width: '2.5rem', height: '2.5rem', bgcolor: 'secondary.main' }}>
+                {getInitials()}
+              </Avatar>
             </Badge>
             <Box sx={{ display: 'flex', ml: 3, alignItems: 'flex-start', flexDirection: 'column' }}>
-              <Typography sx={{ fontWeight: 600 }}>{`${translatedFullName}`}</Typography>
-              <Typography variant='body2' sx={{ fontSize: '0.8rem', color: 'text.disabled' }}></Typography>
+              <Typography sx={{ fontWeight: 600 }}>{user?.username || 'Usuario'}</Typography>
+              <Chip
+                label={getRolLabel()}
+                color={getRolColor()}
+                size="small"
+                sx={{ mt: 0.5, fontWeight: 'bold', fontSize: '0.7rem' }}
+              />
+              {user?.email && (
+                <Typography variant='caption' sx={{ fontSize: '0.7rem', color: 'text.disabled', mt: 0.5 }}>
+                  {user.email}
+                </Typography>
+              )}
             </Box>
           </Box>
         </Box>
 
         <Divider sx={{ mt: '0 !important' }} />
+
+        {/* Opción de perfil */}
         <MenuItem
-          onClick={handleLogout}
+          onClick={() => handleDropdownClose('/perfil')}
           sx={{ py: 2, '& svg': { mr: 2, fontSize: '1.375rem', color: 'text.primary' } }}
         >
+          <Icon icon='mdi:account' />
+          {t('Mi Perfil')}
+        </MenuItem>
+
+        {/* Administrar usuarios - solo super_admin */}
+        {user?.rol === 'super_admin' && (
+          <MenuItem
+            onClick={() => handleDropdownClose('/inventario/usuarios')}
+            sx={{ py: 2, '& svg': { mr: 2, fontSize: '1.375rem', color: 'text.primary' } }}
+          >
+            <Icon icon='mdi:account-group' />
+            {t('Administrar Usuarios')}
+          </MenuItem>
+        )}
+
+        <Divider />
+
+        {/* Cerrar sesión */}
+        <MenuItem
+          onClick={handleLogout}
+          sx={{ py: 2, '& svg': { mr: 2, fontSize: '1.375rem', color: 'error.main' } }}
+        >
           <Icon icon='mdi:logout-variant' />
-          {t('Cerrar sesión')}
+          <Typography color='error.main'>{t('Cerrar sesión')}</Typography>
         </MenuItem>
       </Menu>
     </Fragment>

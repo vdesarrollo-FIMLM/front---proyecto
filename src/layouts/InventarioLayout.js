@@ -1,6 +1,7 @@
 import { Box, Container, AppBar, Toolbar, Typography, Button } from '@mui/material'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
+import UserDropdown from 'src/@core/layouts/components/shared-components/UserDropdown'
 
 const InventarioLayout = ({ children }) => {
   const router = useRouter()
@@ -37,6 +38,7 @@ const InventarioLayout = ({ children }) => {
               {item.label}
             </Button>
           ))}
+          <UserDropdown />
         </Toolbar>
       </AppBar>
       

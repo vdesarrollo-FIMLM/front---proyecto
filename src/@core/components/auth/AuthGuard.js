@@ -1,52 +1,33 @@
-// ** React Imports
+// src/@core/components/auth/AuthGuard.js
 import { useEffect } from 'react'
-
-// ** Next Import
 import { useRouter } from 'next/router'
-
-// ** Hooks Import
 import { useAuth } from 'src/hooks/useAuth'
-
-const modeMaintenance = process.env.NEXT_PUBLIC_MODE_MAINTENANCE
 
 const AuthGuard = props => {
   const { children, fallback } = props
   const auth = useAuth()
   const router = useRouter()
 
-  // 🔥 TEMPORAL: Desactivar autenticación para pruebas
-  return <>{children}</>
+  useEffect(() => {
+    // Si no está autenticado y no está cargando
+    if (!auth.loading && !auth.user) {
+      const returnUrl = router.asPath
+      router.push(`/login?returnUrl=${encodeURIComponent(returnUrl)}`)
+    }
+  }, [auth.loading, auth.user, router])
 
-  /* CÓDIGO ORIGINAL COMENTADO
-  useEffect(
-    () => {
-      if (!router.isReady) {
-        return
-      }
-      if (modeMaintenance != 'true') {
-        if (auth.user === null && !window.localStorage.getItem('userData')) {
-          if (router.asPath !== '/') {
-            router.replace({
-              pathname: '/login',
-              query: { returnUrl: router.asPath }
-            })
-          } else {
-            router.replace('/login')
-          }
-        }
-      } else {
-        router.replace('/maintenance')
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [router.route]
-  )
-  if (auth.loading || auth.user === null) {
-    return fallback
+  // Mostrar fallback mientras carga
+  if (auth.loading) {
+    return fallback || <div>Cargando...</div>
   }
 
+  // Si no está autenticado, no mostrar nada
+  if (!auth.user) {
+    return null
+  }
+
+  // Si está autenticado, mostrar el contenido
   return <>{children}</>
-  */
 }
 
 export default AuthGuard

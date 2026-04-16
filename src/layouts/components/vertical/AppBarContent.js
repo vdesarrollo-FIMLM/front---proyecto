@@ -1,35 +1,37 @@
-// ** MUI Imports
-import Box from '@mui/material/Box'
-import IconButton from '@mui/material/IconButton'
-
-// ** Icon Imports
-import Icon from 'src/@core/components/icon'
-
-// Core Imports
-import LanguageDropdown from 'src/@core/layouts/components/shared-components/LanguageDropdown.js'
-
-// ** Components
-import UserDropdown from 'src/@core/layouts/components/shared-components/UserDropdown'
-import { useState } from 'react'
-import HomeDropdown from 'src/@core/layouts/components/shared-components/HomeDropdown'
+// src/layouts/components/vertical/AppBarContent.js
+import { Box, Typography, Chip } from '@mui/material'
+import { useAuth } from 'src/hooks/useAuth'
 
 const AppBarContent = props => {
-  // ** Props
-  const { hidden, settings, saveSettings, toggleNavVisibility } = props
+  const { user } = useAuth()
+  
+  const getRolColor = () => {
+    switch (user?.rol) {
+      case 'super_admin': return 'error'
+      case 'admin': return 'warning'
+      default: return 'info'
+    }
+  }
+  
+  const getRolLabel = () => {
+    switch (user?.rol) {
+      case 'super_admin': return 'Super Admin'
+      case 'admin': return 'Administrador'
+      default: return 'Operativo'
+    }
+  }
 
   return (
-    <Box sx={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-      <Box className='actions-left' sx={{ mr: 2, display: 'flex', alignItems: 'center' }}>
-        {hidden ? (
-          <IconButton color='inherit' sx={{ ml: -2.75 }} onClick={toggleNavVisibility}>
-            <Icon icon='mdi:menu' />
-          </IconButton>
-        ) : null}
-      </Box>
-      <Box className='actions-right' sx={{ display: 'flex', alignItems: 'center' }}>
-        <HomeDropdown settings={settings} />
-        <UserDropdown settings={settings} />
-      </Box>
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+      <Chip 
+        label={getRolLabel()} 
+        color={getRolColor()} 
+        size="small"
+        sx={{ fontWeight: 'bold' }}
+      />
+      <Typography variant="body2">
+        {user?.username}
+      </Typography>
     </Box>
   )
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { dashboardService } from 'src/services/inventario/dashboard.service'
+import { useAuth } from 'src/hooks/useAuth'
 
 const DashboardView = () => {
   const [stats, setStats] = useState(null)

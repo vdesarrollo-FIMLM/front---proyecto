@@ -57,7 +57,14 @@ import {
 import { salidasService } from 'src/services/inventario/salidas.service'
 import MultipleScannerModal from './components/MultipleScannerModal'
 import { reservasService, getSessionId } from 'src/services/inventario/reservas.service'
+import { useAuth } from 'src/hooks/useAuth'
+
+
+
 const SalidaView = () => {
+
+  const { user } = useAuth()
+  const isSuperAdmin = user?.rol === 'super_admin'
   // Estado principal
   const [productoSeleccionado, setProductoSeleccionado] = useState(null)
   const [productosKit, setProductosKit] = useState([])
@@ -101,7 +108,8 @@ const SalidaView = () => {
   const [editCantidad, setEditCantidad] = useState(1)
 
   const motivos = [
-    'Entrega de Ayudas',
+    'Entrega de Ayudas',           // Modo KIT (con cantidad de kits)
+    'Entrega de Ayudas/Unidades',  // Modo MULTIPRODUCTO (sin kits)
     'Consumo Interno',
     'Dañado',
     'Caducado',
@@ -110,55 +118,67 @@ const SalidaView = () => {
     'Otro'
   ]
 
-  const isModoKit = formData.motivo === 'Entrega de Ayudas'
+  const isModoKit = formData.motivo === 'Entrega de Ayudas'                    
+  const isModoAyudasUnidades = formData.motivo === 'Entrega de Ayudas/Unidades' 
+  const isModoNormal = !isModoKit && !isModoAyudasUnidades                     
 
   // Cargar historial al iniciar
-useEffect(() => {
-  cargarUltimasSalidas()
-  cargarReservaPendiente()  // Nueva función
-}, [])
+  useEffect(() => {
+    cargarUltimasSalidas()
+    cargarReservaPendiente()
+  }, [])
 
-const cargarReservaPendiente = async () => {
-  try {
-    const reserva = await reservasService.obtenerReserva()
-    if (reserva && reserva.items && reserva.items.length > 0) {
-      console.log('🔄 Cargando reserva pendiente:', reserva)
-      
-      // Obtener stock actualizado para cada producto
-      const itemsConStockActualizado = await Promise.all(
-        reserva.items.map(async (item) => {
-          const stockInfo = await reservasService.getStockDisponible(item.producto_id)
-          return {
-            ...item,
-            stock_actual: stockInfo.stock_disponible,
-            stock_fisico: stockInfo.stock_fisico
-          }
-        })
-      )
-      
-      const itemsPendientes = itemsConStockActualizado.map(item => ({
-        id: Date.now() + Math.random(),
-        tipo: 'normal',
-        producto_id: item.producto_id,
-        producto_nombre: item.producto_nombre,
-        producto_codigo: item.producto_codigo,
-        cantidad: item.cantidad,
-        motivo: 'Entrega de Ayudas',
-        cliente: reserva.datos_adicionales?.cliente || '',
-        notas: reserva.datos_adicionales?.notas || '',
-        fecha: reserva.datos_adicionales?.fecha || new Date().toISOString().slice(0, 16),
-        stock_restante: item.stock_actual - item.cantidad,
-        stock_actual: item.stock_actual,
-        stock_fisico: item.stock_fisico,
-        stock_minimo: item.stock_minimo || 5
-      }))
-      
-      setSalidasPendientes(itemsPendientes)
+  const cargarReservaPendiente = async () => {
+    try {
+      const reserva = await reservasService.obtenerReserva()
+      if (reserva && reserva.items && reserva.items.length > 0) {
+        console.log('🔄 Cargando reserva pendiente:', reserva)
+        
+        const itemsConStockActualizado = await Promise.all(
+          reserva.items.map(async (item) => {
+            const stockInfo = await reservasService.getStockDisponible(item.producto_id)
+            return {
+              ...item,
+              stock_actual: stockInfo.stock_disponible,
+              stock_fisico: stockInfo.stock_fisico
+            }
+          })
+        )
+        
+        const itemsPendientes = itemsConStockActualizado.map(item => ({
+          id: Date.now() + Math.random(),
+          tipo: item.tipo === 'kit' ? 'kit' : (item.tipo === 'multiple' ? 'multiple' : 'normal'),
+          nombre: item.nombre,
+          productos: item.productos || [{
+            producto_id: item.producto_id,
+            producto_nombre: item.producto_nombre,
+            producto_codigo: item.producto_codigo,
+            cantidad: item.cantidad,
+            cantidad_por_kit: item.cantidad_por_kit,
+            cantidad_total: item.cantidad_total || item.cantidad
+          }],
+          producto_id: item.producto_id,
+          producto_nombre: item.producto_nombre,
+          producto_codigo: item.producto_codigo,
+          cantidad: item.cantidad,
+          cantidad_kits: item.cantidad_kits,
+          motivo: item.motivo || 'Entrega de Ayudas',
+          cliente: reserva.datos_adicionales?.cliente || '',
+          notas: reserva.datos_adicionales?.notas || '',
+          fecha: reserva.datos_adicionales?.fecha || new Date().toISOString().slice(0, 16),
+          stock_restante: item.stock_actual - item.cantidad,
+          stock_actual: item.stock_actual,
+          stock_fisico: item.stock_fisico,
+          stock_minimo: item.stock_minimo || 5
+        }))
+        
+        setSalidasPendientes(itemsPendientes)
+      }
+    } catch (error) {
+      console.error('Error cargando reserva:', error)
     }
-  } catch (error) {
-    console.error('Error cargando reserva:', error)
   }
-}
+
   const cargarUltimasSalidas = async () => {
     try {
       const salidas = await salidasService.getUltimasSalidas(15)
@@ -166,9 +186,13 @@ const cargarReservaPendiente = async () => {
       
       const pdfInfoPromises = salidas.map(async (mov) => {
         try {
+          if (!mov.id) return { id: mov.id, info: { tiene_pdf: false } }
           const info = await salidasService.getPDFInfo(mov.id)
           return { id: mov.id, info }
         } catch (error) {
+          if (error.response?.status !== 404) {
+            console.error('Error obteniendo PDF info:', error)
+          }
           return { id: mov.id, info: { tiene_pdf: false } }
         }
       })
@@ -186,658 +210,808 @@ const cargarReservaPendiente = async () => {
   }
 
   // Búsqueda de productos
-  // Modificar handleSearch para obtener stock disponible
-const handleSearch = async () => {
-  if (!searchTerm.trim()) return
-  
-  try {
-    const results = await salidasService.buscarProducto(searchTerm)
+  const handleSearch = async () => {
+    if (!searchTerm.trim()) return
     
-    // Para cada producto, obtener el stock disponible
-    const resultsConStockDisponible = await Promise.all(
-      results.map(async (producto) => {
-        try {
-          const stockInfo = await reservasService.getStockDisponible(producto.codigo)
-          return {
-            ...producto,
-            stock_actual: stockInfo.stock_disponible,  // Mostrar stock disponible
-            stock_fisico: stockInfo.stock_fisico,      // Guardar stock físico para referencia
-            stock_reservado_otros: stockInfo.stock_reservado_otros
+    try {
+      const results = await salidasService.buscarProducto(searchTerm)
+      
+      const resultsConStockDisponible = await Promise.all(
+        results.map(async (producto) => {
+          try {
+            const stockInfo = await reservasService.getStockDisponible(producto.codigo)
+            return {
+              ...producto,
+              stock_actual: stockInfo.stock_disponible,
+              stock_fisico: stockInfo.stock_fisico,
+              stock_reservado_otros: stockInfo.stock_reservado_otros
+            }
+          } catch (error) {
+            return producto
           }
-        } catch (error) {
-          return producto
-        }
-      })
-    )
-    
-    setSearchResults(resultsConStockDisponible)
-    setShowSearchResults(true)
-  } catch (error) {
-    setSnackbar({ open: true, message: 'Error al buscar producto', severity: 'error' })
+        })
+      )
+      
+      setSearchResults(resultsConStockDisponible)
+      setShowSearchResults(true)
+    } catch (error) {
+      setSnackbar({ open: true, message: 'Error al buscar producto', severity: 'error' })
+    }
   }
-}
 
   const handleSelectProduct = (producto) => {
-  if (isModoKit) {
-    const existente = productosKit.find(p => p.id === producto.id)
-    
-    if (existente) {
-      setProductosKit(prev =>
-        prev.map(p =>
-          p.id === producto.id ? { ...p, cantidad_por_kit: p.cantidad_por_kit + 1 } : p
+    // Modo kit O modo ayudas/unidades -> agregar a productosKit
+    if (isModoKit || isModoAyudasUnidades) {
+      const existente = productosKit.find(p => p.id === producto.id)
+      
+      if (existente) {
+        setProductosKit(prev =>
+          prev.map(p =>
+            p.id === producto.id ? { ...p, cantidad_por_kit: p.cantidad_por_kit + 1 } : p
+          )
         )
-      )
-      setSnackbar({ open: true, message: `${producto.nombre}: +1 unidad por kit`, severity: 'success' })
+        setSnackbar({ open: true, message: `${producto.nombre}: +1 unidad`, severity: 'success' })
+      } else {
+        setProductosKit(prev => [
+          ...prev,
+          {
+            ...producto,
+            cantidad_por_kit: 1
+          }
+        ])
+        setSnackbar({ open: true, message: `${producto.nombre} agregado`, severity: 'success' })
+      }
+      
+      setSearchTerm('')
+      setShowSearchResults(false)
     } else {
-      setProductosKit(prev => [
-        ...prev,
-        {
-          ...producto,
-          cantidad_por_kit: 1
-        }
-      ])
-      setSnackbar({ open: true, message: `${producto.nombre} agregado al kit`, severity: 'success' })
+      // Modo normal (un solo producto)
+      setProductoSeleccionado(producto)
+      setFormData(prev => ({ ...prev, cantidad: 1 }))
+      setSnackbar({ open: true, message: `Producto seleccionado: ${producto.nombre}`, severity: 'success' })
+      setSearchTerm('')
+      setShowSearchResults(false)
     }
-  } else {
-    setProductoSeleccionado(producto)
-    setFormData(prev => ({ ...prev, cantidad: 1 }))
-    setSnackbar({ open: true, message: `Producto seleccionado: ${producto.nombre}`, severity: 'success' })
   }
-  
-  setSearchTerm('')
-  setShowSearchResults(false)
-}
 
   const handleUpdateCantidadKit = (index, nuevaCantidad) => {
-  // Permitir string vacío
-  if (nuevaCantidad === '') {
-    setProductosKit(prev =>
-      prev.map((p, i) => i === index ? { ...p, cantidad_por_kit: '' } : p)
-    )
-    return
+    if (nuevaCantidad === '') {
+      setProductosKit(prev =>
+        prev.map((p, i) => i === index ? { ...p, cantidad_por_kit: '' } : p)
+      )
+      return
+    }
+    
+    const cantidad = parseInt(nuevaCantidad, 10)
+    if (!isNaN(cantidad) && cantidad > 0) {
+      // Validar stock en tiempo real
+      const producto = productosKit[index]
+      const cantidadTotal = isModoKit ? cantidad * formData.cantidadKits : cantidad
+      
+      if (cantidadTotal > producto.stock_actual) {
+        setSnackbar({ 
+          open: true, 
+          message: `Stock insuficiente: necesita ${cantidadTotal}, disponible: ${producto.stock_actual}`, 
+          severity: 'error' 
+        })
+        return
+      }
+      
+      setProductosKit(prev =>
+        prev.map((p, i) => i === index ? { ...p, cantidad_por_kit: cantidad } : p)
+      )
+    }
   }
-  
-  // Validar que sea número positivo
-  const cantidad = parseInt(nuevaCantidad, 10)
-  if (!isNaN(cantidad) && cantidad > 0) {
-    setProductosKit(prev =>
-      prev.map((p, i) => i === index ? { ...p, cantidad_por_kit: cantidad } : p)
-    )
-  }
-}
 
-const handleRemoveProductoKit = (index) => {
-  const producto = productosKit[index]
-  setProductosKit(prev => prev.filter((_, i) => i !== index))
-  setSnackbar({ open: true, message: `${producto.nombre} eliminado del kit`, severity: 'info' })
-}
+  const handleRemoveProductoKit = (index) => {
+    const producto = productosKit[index]
+    setProductosKit(prev => prev.filter((_, i) => i !== index))
+    setSnackbar({ open: true, message: `${producto.nombre} eliminado`, severity: 'info' })
+  }
 
   const handleClearKit = () => {
-  if (productosKit.length > 0) {
+    if (productosKit.length > 0) {
+      setProductosKit([])
+      setSnackbar({ open: true, message: isModoKit ? 'Kit limpiado' : 'Lista limpiada', severity: 'info' })
+    }
+  }
+
+  const handleClearForm = () => {
+    setProductoSeleccionado(null)
     setProductosKit([])
-    setSnackbar({ open: true, message: 'Kit limpiado', severity: 'info' })
+    setFormData({
+      motivo: 'Entrega de Ayudas',
+      cantidad: 1,
+      cliente: '',
+      kitNombre: '',
+      cantidadKits: 1,
+      notas: '',
+      fecha: new Date().toISOString().slice(0, 16)
+    })
+    setSearchTerm('')
+    setShowSearchResults(false)
   }
-}
 
-const handleClearForm = () => {
-  setProductoSeleccionado(null)
-  setProductosKit([])
-  setFormData({
-    motivo: 'Entrega de Ayudas',
-    cantidad: 1,
-    cliente: '',
-    kitNombre: '',
-    cantidadKits: 1,
-    notas: '',
-    fecha: new Date().toISOString().slice(0, 16)
-  })
-  setSearchTerm('')
-  setShowSearchResults(false)
-}
-
-// Verificar stock
-const verificarStock = () => {
-  if (!productoSeleccionado) return { valido: true, mensaje: '' }
-  
-  const cantidad = formData.cantidad
-  if (cantidad > productoSeleccionado.stock_actual) {
-    return {
-      valido: false,
-      mensaje: `Stock insuficiente. Disponible: ${productoSeleccionado.stock_actual}, Solicitado: ${cantidad}`
+  const verificarStock = () => {
+    if (!productoSeleccionado) return { valido: true, mensaje: '' }
+    
+    const cantidad = formData.cantidad
+    if (cantidad > productoSeleccionado.stock_actual) {
+      return {
+        valido: false,
+        mensaje: `Stock insuficiente. Disponible: ${productoSeleccionado.stock_actual}, Solicitado: ${cantidad}`
+      }
     }
-  }
-  
-  const porcentaje = (cantidad / productoSeleccionado.stock_actual) * 100
-  if (porcentaje > 80) {
-    return {
-      valido: true,
-      advertencia: `⚠️ Estás retirando ${cantidad} de ${productoSeleccionado.stock_actual} unidades (${Math.round(porcentaje)}% del stock). Quedarán solo ${productoSeleccionado.stock_actual - cantidad} unidades.`
+    
+    const porcentaje = (cantidad / productoSeleccionado.stock_actual) * 100
+    if (porcentaje > 80) {
+      return {
+        valido: true,
+        advertencia: `⚠️ Estás retirando ${cantidad} de ${productoSeleccionado.stock_actual} unidades (${Math.round(porcentaje)}% del stock). Quedarán solo ${productoSeleccionado.stock_actual - cantidad} unidades.`
+      }
     }
+    
+    return { valido: true, mensaje: '' }
   }
-  
-  return { valido: true, mensaje: '' }
-}
 
-const verificarStockKit = () => {
-  const cantidadKits = formData.cantidadKits
-  const errores = []
-  
-  productosKit.forEach(producto => {
-    const totalNecesario = producto.cantidad_por_kit * cantidadKits
-    if (totalNecesario > producto.stock_actual) {
-      errores.push({
-        nombre: producto.nombre,
-        necesario: totalNecesario,
-        disponible: producto.stock_actual,
-        porKit: producto.cantidad_por_kit
+  const verificarStockKit = () => {
+    const cantidadKits = isModoKit ? formData.cantidadKits : 1
+    const errores = []
+    
+    productosKit.forEach(producto => {
+      const totalNecesario = producto.cantidad_por_kit * cantidadKits
+      if (totalNecesario > producto.stock_actual) {
+        errores.push({
+          nombre: producto.nombre,
+          necesario: totalNecesario,
+          disponible: producto.stock_actual,
+          porKit: producto.cantidad_por_kit
+        })
+      }
+    })
+    
+    return { errores, valido: errores.length === 0 }
+  }
+
+  const hayErroresStock = () => {
+    if (isModoKit || isModoAyudasUnidades) {
+      const cantidadKits = isModoKit ? (formData.cantidadKits || 1) : 1
+      return productosKit.some(producto => {
+        const cantidadTotal = (producto.cantidad_por_kit || 0) * cantidadKits
+        return cantidadTotal > (producto.stock_actual || 0)
       })
     }
-  })
-  
-  return { errores, valido: errores.length === 0 }
-}
+    if (isModoNormal && productoSeleccionado) {
+      return (formData.cantidad || 0) > (productoSeleccionado.stock_actual || 0)
+    }
+    return false
+  }
+
+  const handleUpdateCantidadKits = (nuevaCantidad) => {
+    const numValue = parseInt(nuevaCantidad, 10)
+    if (!isNaN(numValue) && numValue > 0) {
+      // Validar stock con la nueva cantidad de kits
+      const erroresStock = []
+      productosKit.forEach(producto => {
+        const cantidadTotal = producto.cantidad_por_kit * numValue
+        if (cantidadTotal > producto.stock_actual) {
+          erroresStock.push({
+            nombre: producto.nombre,
+            cantidadTotal: cantidadTotal,
+            stockActual: producto.stock_actual
+          })
+        }
+      })
+      
+      if (erroresStock.length > 0) {
+        let mensaje = '⚠️ Stock insuficiente para la cantidad de kits seleccionada:\n'
+        erroresStock.forEach(e => {
+          mensaje += `• ${e.nombre}: necesita ${e.cantidadTotal}, disponible: ${e.stockActual}\n`
+        })
+        setSnackbar({ open: true, message: mensaje, severity: 'error' })
+      } else {
+        setFormData(prev => ({ ...prev, cantidadKits: numValue }))
+      }
+    }
+  }
 
   // Agregar a lista de pendientes
   const handleAgregarALista = async () => {
-  if (isModoKit) {
-    if (productosKit.length === 0) {
-      setSnackbar({ open: true, message: '❌ Selecciona al menos un producto para el kit', severity: 'error' })
-      return
-    }
-    
-    if (!formData.kitNombre.trim()) {
-      setSnackbar({ open: true, message: '❌ Ingresa un nombre para el kit', severity: 'error' })
-      return
-    }
-    
-    if (!formData.cliente.trim()) {
-      setSnackbar({ open: true, message: '❌ Ingresa el nombre del beneficiario', severity: 'error' })
-      return
-    }
-    
-    const stockCheck = verificarStockKit()
-    if (!stockCheck.valido) {
-      let mensaje = 'Stock insuficiente:\n\n'
-      stockCheck.errores.forEach(e => {
-        mensaje += `• ${e.nombre}: Necesario ${e.porKit} × ${formData.cantidadKits} kits = ${e.necesario} unidades, Disponible: ${e.disponible}\n`
-      })
-      alert(mensaje)
-      return
-    }
-    
-    const kit = {
-      id: Date.now(),
-      tipo: 'kit',
-      nombre: formData.kitNombre,
-      cantidad_kits: formData.cantidadKits,
-      motivo: formData.motivo,
-      cliente: formData.cliente,
-      notas: formData.notas,
-      fecha: formData.fecha,
-      productos: productosKit.map(p => ({
-        id: p.id,
-        producto_id: p.codigo,
-        producto_nombre: p.nombre,
-        producto_codigo: p.codigo,
-        cantidad_por_kit: p.cantidad_por_kit,
-        cantidad_total: p.cantidad_por_kit * formData.cantidadKits,
-        stock_disponible: p.stock_actual,
-        stock_actual: p.stock_actual,
-        stock_minimo: p.stock_minimo || 5
-      }))
-    }
-    
-    setSalidasPendientes(prev => [...prev, kit])
-    
-    const itemsParaReserva = kit.productos.map(p => ({
-      producto_id: p.producto_id,
-      producto_nombre: p.producto_nombre,
-      producto_codigo: p.producto_codigo,
-      cantidad: p.cantidad_total,
-      stock_actual: p.stock_actual,
-      stock_minimo: p.stock_minimo || 5
-    }))
-    
-    try {
-      await reservasService.guardarReserva(itemsParaReserva, {
+    // MODO KIT (Entrega de Ayudas con cantidad de kits)
+    if (isModoKit) {
+      if (productosKit.length === 0) {
+        setSnackbar({ open: true, message: '❌ Selecciona al menos un producto para el kit', severity: 'error' })
+        return
+      }
+      
+      if (!formData.kitNombre.trim()) {
+        setSnackbar({ open: true, message: '❌ Ingresa un nombre para el kit', severity: 'error' })
+        return
+      }
+      
+      if (!formData.cliente.trim()) {
+        setSnackbar({ open: true, message: '❌ Ingresa el nombre del beneficiario', severity: 'error' })
+        return
+      }
+      
+      const stockCheck = verificarStockKit()
+      if (!stockCheck.valido) {
+        let mensaje = 'Stock insuficiente:\n\n'
+        stockCheck.errores.forEach(e => {
+          mensaje += `• ${e.nombre}: Necesario ${e.porKit} × ${formData.cantidadKits} kits = ${e.necesario} unidades, Disponible: ${e.disponible}\n`
+        })
+        alert(mensaje)
+        return
+      }
+      
+      const kit = {
+        id: Date.now(),
         tipo: 'kit',
-        kitNombre: kit.nombre,
-        cliente: kit.cliente,
-        notas: kit.notas,
-        fecha: kit.fecha
+        nombre: formData.kitNombre,
+        cantidad_kits: formData.cantidadKits,
+        motivo: formData.motivo,
+        cliente: formData.cliente,
+        notas: formData.notas,
+        fecha: formData.fecha,
+        productos: productosKit.map(p => ({
+          id: p.id,
+          producto_id: p.codigo,
+          producto_nombre: p.nombre,
+          producto_codigo: p.codigo,
+          cantidad_por_kit: p.cantidad_por_kit,
+          cantidad_total: p.cantidad_por_kit * formData.cantidadKits,
+          stock_disponible: p.stock_actual,
+          stock_actual: p.stock_actual,
+          stock_minimo: p.stock_minimo || 5
+        }))
+      }
+      
+      setSalidasPendientes(prev => [...prev, kit])
+      
+      const itemsParaReserva = kit.productos.map(p => ({
+        producto_id: p.producto_id,
+        producto_nombre: p.producto_nombre,
+        producto_codigo: p.producto_codigo,
+        cantidad: p.cantidad_total,
+        stock_actual: p.stock_actual,
+        stock_minimo: p.stock_minimo || 5,
+        tipo: 'kit',
+        nombre: kit.nombre,
+        cantidad_kits: kit.cantidad_kits
+      }))
+      
+      try {
+        await reservasService.guardarReserva(itemsParaReserva, {
+          tipo: 'kit',
+          kitNombre: kit.nombre,
+          cliente: kit.cliente,
+          notas: kit.notas,
+          fecha: kit.fecha
+        })
+        reservasService.clearCache()
+        setSnackbar({ open: true, message: `✅ Kit "${formData.kitNombre}" agregado y stock reservado`, severity: 'success' })
+      } catch (error) {
+        setSnackbar({ open: true, message: `❌ Error reservando stock: ${error.response?.data?.detail || error.message}`, severity: 'error' })
+        return
+      }
+      
+      handleClearForm()
+    }
+    // MODO MULTIPRODUCTO (Entrega de Ayudas/Unidades)
+    else if (isModoAyudasUnidades) {
+      if (productosKit.length === 0) {
+        setSnackbar({ open: true, message: '❌ Selecciona al menos un producto', severity: 'error' })
+        return
+      }
+      
+      if (!formData.cliente.trim()) {
+        setSnackbar({ open: true, message: '❌ Ingresa el nombre del beneficiario', severity: 'error' })
+        return
+      }
+      
+      // Verificar stock para cada producto
+      const erroresStock = []
+      productosKit.forEach(producto => {
+        if (producto.cantidad_por_kit > producto.stock_actual) {
+          erroresStock.push({
+            nombre: producto.nombre,
+            necesario: producto.cantidad_por_kit,
+            disponible: producto.stock_actual
+          })
+        }
       })
-      reservasService.clearCache()
-      setSnackbar({ open: true, message: `✅ Kit "${formData.kitNombre}" agregado y stock reservado`, severity: 'success' })
-    } catch (error) {
-      setSnackbar({ open: true, message: `❌ Error reservando stock: ${error.response?.data?.detail || error.message}`, severity: 'error' })
-      return
+      
+      if (erroresStock.length > 0) {
+        let mensaje = 'Stock insuficiente:\n\n'
+        erroresStock.forEach(e => {
+          mensaje += `• ${e.nombre}: necesita ${e.necesario}, disponible: ${e.disponible}\n`
+        })
+        alert(mensaje)
+        return
+      }
+      
+      const salidaMultiple = {
+        id: Date.now(),
+        tipo: 'multiple',
+        nombre: `Salida múltiple (${productosKit.length} productos)`,
+        motivo: formData.motivo,
+        cliente: formData.cliente,
+        notas: formData.notas,
+        fecha: formData.fecha,
+        productos: productosKit.map(p => ({
+          id: p.id,
+          producto_id: p.codigo,
+          producto_nombre: p.nombre,
+          producto_codigo: p.codigo,
+          cantidad: p.cantidad_por_kit,
+          stock_disponible: p.stock_actual
+        }))
+      }
+      
+      setSalidasPendientes(prev => [...prev, salidaMultiple])
+      
+      const itemsParaReserva = salidaMultiple.productos.map(p => ({
+        producto_id: p.producto_id,
+        producto_nombre: p.producto_nombre,
+        producto_codigo: p.producto_codigo,
+        cantidad: p.cantidad,
+        stock_actual: p.stock_disponible,
+        tipo: 'multiple'
+      }))
+      
+      try {
+        await reservasService.guardarReserva(itemsParaReserva, {
+          tipo: 'multiple',
+          cliente: salidaMultiple.cliente,
+          notas: salidaMultiple.notas,
+          fecha: salidaMultiple.fecha
+        })
+        setSnackbar({ open: true, message: `✅ ${productosKit.length} productos agregados`, severity: 'success' })
+      } catch (error) {
+        setSnackbar({ open: true, message: `❌ Error reservando stock: ${error.response?.data?.detail || error.message}`, severity: 'error' })
+        return
+      }
+      
+      handleClearForm()
     }
-    
-    handleClearForm()
-    
-  } else {
-    // Salida normal
-    if (!productoSeleccionado) {
-      setSnackbar({ open: true, message: '❌ Selecciona un producto primero', severity: 'error' })
-      return
+    // MODO NORMAL (un solo producto)
+    else {
+      if (!productoSeleccionado) {
+        setSnackbar({ open: true, message: '❌ Selecciona un producto primero', severity: 'error' })
+        return
+      }
+      
+      const stockInfo = await reservasService.getStockDisponible(productoSeleccionado.codigo)
+      const stockDisponible = stockInfo.stock_disponible
+      
+      if (formData.cantidad > stockDisponible) {
+        setSnackbar({ 
+          open: true, 
+          message: `❌ Stock insuficiente. Disponible: ${stockDisponible}, Solicitado: ${formData.cantidad}`,
+          severity: 'error'
+        })
+        return
+      }
+      
+      const salida = {
+        id: Date.now(),
+        tipo: 'normal',
+        producto: productoSeleccionado,
+        producto_id: productoSeleccionado.codigo,
+        cantidad: formData.cantidad,
+        motivo: formData.motivo,
+        cliente: formData.cliente,
+        notas: formData.notas,
+        fecha: formData.fecha,
+        stock_restante: productoSeleccionado.stock_actual - formData.cantidad,
+        producto_nombre: productoSeleccionado.nombre,
+        producto_codigo: productoSeleccionado.codigo,
+        stock_actual: productoSeleccionado.stock_actual,
+        stock_minimo: productoSeleccionado.stock_minimo
+      }
+      
+      setSalidasPendientes(prev => [...prev, salida])
+      
+      const itemsParaReserva = [{
+        producto_id: salida.producto_id,
+        producto_nombre: salida.producto_nombre,
+        producto_codigo: salida.producto_codigo,
+        cantidad: salida.cantidad,
+        stock_actual: salida.stock_actual,
+        stock_minimo: salida.stock_minimo,
+        tipo: 'normal'
+      }]
+      
+      try {
+        await reservasService.guardarReserva(itemsParaReserva, {
+          tipo: 'normal',
+          cliente: salida.cliente,
+          notas: salida.notas,
+          fecha: salida.fecha
+        })
+        setSnackbar({ open: true, message: `✅ ${formData.cantidad} unidades reservadas de "${productoSeleccionado.nombre}"`, severity: 'success' })
+      } catch (error) {
+        setSnackbar({ open: true, message: `❌ Error reservando stock: ${error.response?.data?.detail || error.message}`, severity: 'error' })
+        return
+      }
+      
+      handleClearForm()
     }
-    
-   // Obtener stock disponible actualizado
-    const stockInfo = await reservasService.getStockDisponible(productoSeleccionado.codigo)
-    const stockDisponible = stockInfo.stock_disponible
-    
-    if (formData.cantidad > stockDisponible) {
-      setSnackbar({ 
-        open: true, 
-        message: `❌ Stock insuficiente. Disponible: ${stockDisponible}, Solicitado: ${formData.cantidad}`,
-        severity: 'error'
-      })
-      return
-    }
-    
-    const salida = {
-      id: Date.now(),
-      tipo: 'normal',
-      producto: productoSeleccionado,
-      producto_id: productoSeleccionado.codigo,
-      cantidad: formData.cantidad,
-      motivo: formData.motivo,
-      cliente: formData.cliente,
-      notas: formData.notas,
-      fecha: formData.fecha,
-      stock_restante: productoSeleccionado.stock_actual - formData.cantidad,
-      producto_nombre: productoSeleccionado.nombre,
-      producto_codigo: productoSeleccionado.codigo,
-      stock_actual: productoSeleccionado.stock_actual,
-      stock_minimo: productoSeleccionado.stock_minimo
-    }
-    
-    setSalidasPendientes(prev => [...prev, salida])
-    
-    const itemsParaReserva = [{
-      producto_id: salida.producto_id,
-      producto_nombre: salida.producto_nombre,
-      producto_codigo: salida.producto_codigo,
-      cantidad: salida.cantidad,
-      stock_actual: salida.stock_actual,
-      stock_minimo: salida.stock_minimo
-    }]
+  }
+
+  const handleConfirmarSalida = async (item, index) => {
+    setLoading(true)
     
     try {
-      await reservasService.guardarReserva(itemsParaReserva, {
-        tipo: 'normal',
-        cliente: salida.cliente,
-        notas: salida.notas,
-        fecha: salida.fecha
-      })
-      setSnackbar({ open: true, message: `✅ ${formData.cantidad} unidades reservadas de "${productoSeleccionado.nombre}"`, severity: 'success' })
+      const resultado = await reservasService.confirmarReserva()
+      
+      if (resultado.success) {
+        setSnackbar({ 
+          open: true, 
+          message: `✅ ${resultado.movimientos.length} salida(s) confirmada(s)`, 
+          severity: 'success' 
+        })
+        setSalidasPendientes(prev => prev.filter((_, i) => i !== index))
+        await cargarUltimasSalidas()
+        reservasService.clearCache()
+      } else {
+        throw new Error(resultado.message || 'Error al confirmar')
+      }
+      
     } catch (error) {
-      setSnackbar({ open: true, message: `❌ Error reservando stock: ${error.response?.data?.detail || error.message}`, severity: 'error' })
-      return
-    }
-    
-    handleClearForm()
-  }
-}
-
-  // 🆕 CONFIRMAR SALIDA INDIVIDUAL
-  const handleConfirmarSalida = async (item, index) => {
-  setLoading(true)
-  
-  try {
-    // Confirmar la reserva completa
-    const resultado = await reservasService.confirmarReserva()
-    
-    if (resultado.success) {
       setSnackbar({ 
         open: true, 
-        message: `✅ ${resultado.movimientos.length} salida(s) confirmada(s)`, 
-        severity: 'success' 
+        message: `❌ Error al confirmar: ${error.response?.data?.detail || error.message}`, 
+        severity: 'error' 
       })
-      // Eliminar SOLO este item de la lista (no todas)
-      setSalidasPendientes(prev => prev.filter((_, i) => i !== index))
-      
-      // Actualizar historial en segundo plano
-      await cargarUltimasSalidas()
-      
-      // Limpiar caché
-      reservasService.clearCache()
-      
-    } else {
-      throw new Error(resultado.message || 'Error al confirmar')
+    } finally {
+      setLoading(false)
     }
-    
-  } catch (error) {
-    setSnackbar({ 
-      open: true, 
-      message: `❌ Error al confirmar: ${error.response?.data?.detail || error.message}`, 
-      severity: 'error' 
-    })
-  } finally {
-    setLoading(false)
   }
-}
 
-  // Reemplazar handleEliminarPendiente
-const handleEliminarPendiente = async (index) => {
-  const item = salidasPendientes[index]
-  if (window.confirm(`¿Eliminar ${item.tipo === 'kit' ? `kit "${item.nombre}"` : `salida de ${item.cantidad} unidades de "${item.producto_nombre}"`} de la lista de pendientes?`)) {
-    
-    // Calcular los productos a liberar (solo los de esta salida)
-    const ajustes = []
-    
-    if (item.tipo === 'kit') {
-      // Para kit: liberar todos los productos del kit
-      for (const producto of item.productos) {
+  const handleEliminarPendiente = async (index) => {
+    const item = salidasPendientes[index]
+    if (window.confirm(`¿Eliminar ${item.tipo === 'kit' ? `kit "${item.nombre}"` : item.tipo === 'multiple' ? `salida múltiple de ${item.productos?.length} productos` : `salida de ${item.cantidad} unidades de "${item.producto_nombre}"`} de la lista de pendientes?`)) {
+      
+      const ajustes = []
+      
+      if (item.tipo === 'kit') {
+        for (const producto of item.productos) {
+          ajustes.push({
+            producto_id: producto.producto_id,
+            diferencia: -producto.cantidad_total,
+            producto_nombre: producto.producto_nombre,
+            producto_codigo: producto.producto_codigo
+          })
+        }
+      } else if (item.tipo === 'multiple') {
+        for (const producto of item.productos) {
+          ajustes.push({
+            producto_id: producto.producto_id,
+            diferencia: -producto.cantidad,
+            producto_nombre: producto.producto_nombre,
+            producto_codigo: producto.producto_codigo
+          })
+        }
+      } else {
         ajustes.push({
-          producto_id: producto.producto_id,
-          diferencia: -producto.cantidad_total,  // Negativo = liberar
-          producto_nombre: producto.producto_nombre,
-          producto_codigo: producto.producto_codigo
+          producto_id: item.producto_id,
+          diferencia: -item.cantidad,
+          producto_nombre: item.producto_nombre,
+          producto_codigo: item.producto_codigo
         })
       }
-    } else {
-      // Para salida normal: liberar el producto individual
-      ajustes.push({
-        producto_id: item.producto_id,
-        diferencia: -item.cantidad,  // Negativo = liberar
-        producto_nombre: item.producto_nombre,
-        producto_codigo: item.producto_codigo
-      })
+      
+      try {
+        await reservasService.ajustarReserva(ajustes, {
+          tipo: 'eliminacion',
+          motivo: 'Salida cancelada'
+        })
+        
+        setSalidasPendientes(prev => prev.filter((_, i) => i !== index))
+        
+        const mensajes = ajustes.map(a => 
+          `${a.producto_nombre}: ${Math.abs(a.diferencia)} unidades liberadas`
+        )
+        setSnackbar({ open: true, message: `✅ Stock liberado: ${mensajes.join(', ')}`, severity: 'success' })
+        
+        if (typeof cargarUltimasSalidas === 'function') {
+          cargarUltimasSalidas()
+        }
+        
+        reservasService.clearCache()
+        
+      } catch (error) {
+        setSnackbar({ open: true, message: `Error al liberar stock: ${error.response?.data?.detail || error.message}`, severity: 'error' })
+      }
     }
+  }
+
+  const handleEditarSalida = (item) => {
+    setEditandoSalida(item)
     
-    try {
-      // Enviar ajustes negativos para liberar el stock
-      await reservasService.ajustarReserva(ajustes, {
-        tipo: 'eliminacion',
-        motivo: 'Salida cancelada'
+    if (item.tipo === 'kit' || item.tipo === 'multiple') {
+      setEditFormData({
+        motivo: item.motivo,
+        cliente: item.cliente,
+        notas: item.notas || '',
+        fecha: item.fecha
+      })
+      setEditProductosKit([...item.productos])
+      setEditCantidad(item.tipo === 'kit' ? item.cantidad_kits : 1)
+    } else {
+      setEditFormData({
+        motivo: item.motivo,
+        cliente: item.cliente || '',
+        notas: item.notas || '',
+        fecha: item.fecha
+      })
+      setEditCantidad(item.cantidad)
+      setEditProductosKit([])
+    }
+    setEditModalOpen(true)
+  }
+
+  const handleGuardarEdicion = async () => {
+    if (!editandoSalida) return
+    
+    const updatedItem = { ...editandoSalida }
+    const ajustes = []
+    
+    if (editandoSalida.tipo === 'kit') {
+      updatedItem.motivo = editFormData.motivo
+      updatedItem.cliente = editFormData.cliente
+      updatedItem.notas = editFormData.notas
+      updatedItem.fecha = editFormData.fecha
+      updatedItem.cantidad_kits = editCantidad
+      
+      const productosOriginales = {}
+      editandoSalida.productos.forEach(p => {
+        productosOriginales[p.producto_id] = p.cantidad_total
       })
       
-      // Eliminar SOLO este item de la lista local
-      setSalidasPendientes(prev => prev.filter((_, i) => i !== index))
+      updatedItem.productos = editProductosKit.map(p => ({
+        ...p,
+        cantidad_total: p.cantidad_por_kit * editCantidad
+      }))
+      updatedItem.total_unidades = updatedItem.productos.reduce((sum, p) => sum + p.cantidad_total, 0)
       
-      const mensajes = ajustes.map(a => 
-        `${a.producto_nombre}: ${Math.abs(a.diferencia)} unidades liberadas`
-      )
-      setSnackbar({ open: true, message: `✅ Stock liberado: ${mensajes.join(', ')}`, severity: 'success' })
-      
-      // Esto actualiza los datos del dashboard si es necesario
-      if (typeof cargarUltimasSalidas === 'function') {
-        cargarUltimasSalidas() // Actualizar historial
+      for (const producto of updatedItem.productos) {
+        const cantidadOriginal = productosOriginales[producto.producto_id] || 0
+        const cantidadNueva = producto.cantidad_total
+        const diferencia = cantidadNueva - cantidadOriginal
+        
+        if (diferencia !== 0) {
+          ajustes.push({
+            producto_id: producto.producto_id,
+            diferencia: diferencia,
+            producto_nombre: producto.producto_nombre,
+            producto_codigo: producto.producto_codigo
+          })
+        }
       }
       
-      // Limpiar caché de stock para que las próximas búsquedas tengan datos frescos
-      reservasService.clearCache()
+      for (const [productoId, cantidadOriginal] of Object.entries(productosOriginales)) {
+        const existe = updatedItem.productos.find(p => p.producto_id === productoId)
+        if (!existe) {
+          ajustes.push({
+            producto_id: productoId,
+            diferencia: -cantidadOriginal,
+            producto_nombre: editandoSalida.productos.find(p => p.producto_id === productoId)?.producto_nombre || productoId,
+            producto_codigo: editandoSalida.productos.find(p => p.producto_id === productoId)?.producto_codigo || productoId
+          })
+        }
+      }
       
-    } catch (error) {
-      setSnackbar({ open: true, message: `Error al liberar stock: ${error.response?.data?.detail || error.message}`, severity: 'error' })
-    }
-  }
-}
-
-// ==========================================
-// EDITAR SALIDA
-// ==========================================
-const handleEditarSalida = (item) => {
-  setEditandoSalida(item)
-  
-  if (item.tipo === 'kit') {
-    setEditFormData({
-      motivo: item.motivo,
-      cliente: item.cliente,
-      notas: item.notas || '',
-      fecha: item.fecha
-    })
-    setEditProductosKit([...item.productos])
-    setEditCantidad(item.cantidad_kits)
-  } else {
-    setEditFormData({
-      motivo: item.motivo,
-      cliente: item.cliente || '',
-      notas: item.notas || '',
-      fecha: item.fecha
-    })
-    setEditCantidad(item.cantidad)
-    setEditProductosKit([])
-  }
-  setEditModalOpen(true)
-}
-
-// ==========================================
-// GUARDAR EDICIÓN (CORREGIDO)
-// ==========================================
-const handleGuardarEdicion = async () => {
-  if (!editandoSalida) return
-  
-  const updatedItem = { ...editandoSalida }
-  const ajustes = [] // Para guardar las diferencias
-  
-  if (editandoSalida.tipo === 'kit') {
-    updatedItem.motivo = editFormData.motivo
-    updatedItem.cliente = editFormData.cliente
-    updatedItem.notas = editFormData.notas
-    updatedItem.fecha = editFormData.fecha
-    updatedItem.cantidad_kits = editCantidad
-    
-    // Calcular diferencias por producto
-    const productosOriginales = {}
-    editandoSalida.productos.forEach(p => {
-      productosOriginales[p.producto_id] = p.cantidad_total
-    })
-    
-    updatedItem.productos = editProductosKit.map(p => ({
-      ...p,
-      cantidad_total: p.cantidad_por_kit * editCantidad
-    }))
-    updatedItem.total_unidades = updatedItem.productos.reduce((sum, p) => sum + p.cantidad_total, 0)
-    
-    // Calcular ajustes (diferencia entre nueva y original)
-    for (const producto of updatedItem.productos) {
-      const cantidadOriginal = productosOriginales[producto.producto_id] || 0
-      const cantidadNueva = producto.cantidad_total
+    } else if (editandoSalida.tipo === 'multiple') {
+      updatedItem.motivo = editFormData.motivo
+      updatedItem.cliente = editFormData.cliente
+      updatedItem.notas = editFormData.notas
+      updatedItem.fecha = editFormData.fecha
+      
+      const productosOriginales = {}
+      editandoSalida.productos.forEach(p => {
+        productosOriginales[p.producto_id] = p.cantidad
+      })
+      
+      updatedItem.productos = editProductosKit.map(p => ({
+        ...p,
+        cantidad: p.cantidad_por_kit
+      }))
+      
+      for (const producto of updatedItem.productos) {
+        const cantidadOriginal = productosOriginales[producto.producto_id] || 0
+        const cantidadNueva = producto.cantidad
+        const diferencia = cantidadNueva - cantidadOriginal
+        
+        if (diferencia !== 0) {
+          ajustes.push({
+            producto_id: producto.producto_id,
+            diferencia: diferencia,
+            producto_nombre: producto.producto_nombre,
+            producto_codigo: producto.producto_codigo
+          })
+        }
+      }
+      
+      for (const [productoId, cantidadOriginal] of Object.entries(productosOriginales)) {
+        const existe = updatedItem.productos.find(p => p.producto_id === productoId)
+        if (!existe) {
+          ajustes.push({
+            producto_id: productoId,
+            diferencia: -cantidadOriginal,
+            producto_nombre: editandoSalida.productos.find(p => p.producto_id === productoId)?.producto_nombre || productoId,
+            producto_codigo: editandoSalida.productos.find(p => p.producto_id === productoId)?.producto_codigo || productoId
+          })
+        }
+      }
+      
+    } else {
+      const cantidadOriginal = editandoSalida.cantidad
+      const cantidadNueva = editCantidad
       const diferencia = cantidadNueva - cantidadOriginal
+      
+      updatedItem.motivo = editFormData.motivo
+      updatedItem.cliente = editFormData.cliente
+      updatedItem.notas = editFormData.notas
+      updatedItem.fecha = editFormData.fecha
+      updatedItem.cantidad = editCantidad
+      updatedItem.stock_restante = updatedItem.stock_actual - editCantidad
       
       if (diferencia !== 0) {
         ajustes.push({
-          producto_id: producto.producto_id,
-          diferencia: diferencia,  // Positivo = reservar más, Negativo = liberar
-          producto_nombre: producto.producto_nombre,
-          producto_codigo: producto.producto_codigo
-        })
-      }
-    }
-    
-    // También verificar productos que fueron eliminados
-    for (const [productoId, cantidadOriginal] of Object.entries(productosOriginales)) {
-      const existe = updatedItem.productos.find(p => p.producto_id === productoId)
-      if (!existe) {
-        ajustes.push({
-          producto_id: productoId,
-          diferencia: -cantidadOriginal,  // Liberar todo
-          producto_nombre: editandoSalida.productos.find(p => p.producto_id === productoId)?.producto_nombre || productoId,
-          producto_codigo: editandoSalida.productos.find(p => p.producto_id === productoId)?.producto_codigo || productoId
-        })
-      }
-    }
-    
-  } else {
-    // Salida normal
-    const cantidadOriginal = editandoSalida.cantidad
-    const cantidadNueva = editCantidad
-    const diferencia = cantidadNueva - cantidadOriginal
-    
-    updatedItem.motivo = editFormData.motivo
-    updatedItem.cliente = editFormData.cliente
-    updatedItem.notas = editFormData.notas
-    updatedItem.fecha = editFormData.fecha
-    updatedItem.cantidad = editCantidad
-    updatedItem.stock_restante = updatedItem.stock_actual - editCantidad
-    
-    if (diferencia !== 0) {
-      ajustes.push({
-        producto_id: editandoSalida.producto_id,
-        diferencia: diferencia,
-        producto_nombre: editandoSalida.producto_nombre,
-        producto_codigo: editandoSalida.producto_codigo
-      })
-    }
-  }
-  
-  // Actualizar la lista local
-  const nuevasPendientes = [...salidasPendientes]
-  const index = salidasPendientes.findIndex(s => s.id === editandoSalida.id)
-  if (index !== -1) {
-    nuevasPendientes[index] = updatedItem
-    setSalidasPendientes(nuevasPendientes)
-    
-    if (ajustes.length > 0) {
-      try {
-        // Enviar los ajustes al backend
-        await reservasService.ajustarReserva(ajustes, {
-          tipo: 'edicion',
-          cliente: updatedItem.cliente,
-          notas: updatedItem.notas,
-          fecha: updatedItem.fecha
-        })
-        
-        const mensajes = ajustes.map(a => {
-          if (a.diferencia > 0) {
-            return `${a.producto_nombre}: +${a.diferencia} unidades reservadas`
-          } else {
-            return `${a.producto_nombre}: ${Math.abs(a.diferencia)} unidades liberadas`
-          }
-        })
-        setSnackbar({ open: true, message: `✅ Stock actualizado: ${mensajes.join(', ')}`, severity: 'success' })
-        
-      } catch (error) {
-        setSnackbar({ open: true, message: `Error actualizando reserva: ${error.response?.data?.detail || error.message}`, severity: 'error' })
-      }
-    }
-  }
-  
-  setEditModalOpen(false)
-  setEditandoSalida(null)
-}
-// ==========================================
-// ACTUALIZAR CANTIDAD EN KIT DURANTE EDICIÓN
-// ==========================================
-const handleEditUpdateCantidadKit = (index, nuevaCantidad) => {
-  if (nuevaCantidad === '') {
-    const nuevosProductos = [...editProductosKit]
-    nuevosProductos[index].cantidad_por_kit = ''
-    setEditProductosKit(nuevosProductos)
-    return
-  }
-  
-  const cantidad = parseInt(nuevaCantidad, 10)
-  if (!isNaN(cantidad) && cantidad > 0) {
-    const nuevosProductos = [...editProductosKit]
-    nuevosProductos[index].cantidad_por_kit = cantidad
-    nuevosProductos[index].cantidad_total = cantidad * editCantidad
-    setEditProductosKit(nuevosProductos)
-  }
-}
-
-// ==========================================
-// ELIMINAR PRODUCTO DEL KIT EN EDICIÓN
-// ==========================================
-const handleEditRemoveProductoKit = (index) => {
-  const nuevosProductos = editProductosKit.filter((_, i) => i !== index)
-  setEditProductosKit(nuevosProductos)
-}
-
-// ==========================================
-// BUSCAR PRODUCTO PARA AGREGAR A SALIDA EXISTENTE
-// ==========================================
-const handleEditSearch = async () => {
-  if (!editSearchTerm.trim()) return
-  
-  try {
-    const results = await salidasService.buscarProducto(editSearchTerm)
-    setEditSearchResults(results)
-    setEditShowSearchResults(true)
-  } catch (error) {
-    setSnackbar({ open: true, message: 'Error al buscar producto', severity: 'error' })
-  }
-}
-
-// ==========================================
-// AGREGAR PRODUCTO A LA SALIDA QUE SE ESTÁ EDITANDO
-// ==========================================
-const handleAgregarProductoAEdicion = (producto) => {
-  if (editandoSalida.tipo === 'kit') {
-    const existente = editProductosKit.find(p => p.producto_id === producto.id)
-    if (existente) {
-      const nuevosProductos = editProductosKit.map(p =>
-        p.producto_id === producto.id 
-          ? { ...p, cantidad_por_kit: p.cantidad_por_kit + 1, cantidad_total: (p.cantidad_por_kit + 1) * editCantidad }
-          : p
-      )
-      setEditProductosKit(nuevosProductos)
-      setSnackbar({ open: true, message: `${producto.nombre}: +1 unidad por kit`, severity: 'success' })
-    } else {
-      setEditProductosKit(prev => [
-        ...prev,
-        {
-          producto_id: producto.id,
-          producto_nombre: producto.nombre,
-          producto_codigo: producto.codigo,
-          cantidad_por_kit: 1,
-          cantidad_total: 1 * editCantidad,
-          stock_disponible: producto.stock_actual
-        }
-      ])
-      setSnackbar({ open: true, message: `${producto.nombre} agregado al kit`, severity: 'success' })
-    }
-  } else {
-    const confirmar = window.confirm(
-      `Esta salida actualmente tiene el producto "${editandoSalida.producto_nombre}".\n\n` +
-      `¿Deseas agregar "${producto.nombre}"? Esto convertirá la salida en un KIT con múltiples productos.\n\n` +
-      `¿Continuar?`
-    )
-    
-    if (confirmar) {
-      const nuevosProductos = [
-        {
           producto_id: editandoSalida.producto_id,
+          diferencia: diferencia,
           producto_nombre: editandoSalida.producto_nombre,
-          producto_codigo: editandoSalida.producto_codigo,
-          cantidad_por_kit: editandoSalida.cantidad,
-          cantidad_total: editandoSalida.cantidad,
-          stock_disponible: editandoSalida.stock_actual
-        },
-        {
-          producto_id: producto.id,
-          producto_nombre: producto.nombre,
-          producto_codigo: producto.codigo,
-          cantidad_por_kit: 1,
-          cantidad_total: 1,
-          stock_disponible: producto.stock_actual
-        }
-      ]
+          producto_codigo: editandoSalida.producto_codigo
+        })
+      }
+    }
+    
+    const nuevasPendientes = [...salidasPendientes]
+    const index = salidasPendientes.findIndex(s => s.id === editandoSalida.id)
+    if (index !== -1) {
+      nuevasPendientes[index] = updatedItem
+      setSalidasPendientes(nuevasPendientes)
       
-      setEditandoSalida(prev => ({
-        ...prev,
-        tipo: 'kit',
-        nombre: `Kit múltiple (${editandoSalida.producto_nombre} + ${producto.nombre})`,
-        productos: nuevosProductos,
-        cantidad_kits: 1
-      }))
+      if (ajustes.length > 0) {
+        try {
+          await reservasService.ajustarReserva(ajustes, {
+            tipo: 'edicion',
+            cliente: updatedItem.cliente,
+            notas: updatedItem.notas,
+            fecha: updatedItem.fecha
+          })
+          
+          const mensajes = ajustes.map(a => {
+            if (a.diferencia > 0) {
+              return `${a.producto_nombre}: +${a.diferencia} unidades reservadas`
+            } else {
+              return `${a.producto_nombre}: ${Math.abs(a.diferencia)} unidades liberadas`
+            }
+          })
+          setSnackbar({ open: true, message: `✅ Stock actualizado: ${mensajes.join(', ')}`, severity: 'success' })
+          
+        } catch (error) {
+          setSnackbar({ open: true, message: `Error actualizando reserva: ${error.response?.data?.detail || error.message}`, severity: 'error' })
+        }
+      }
+    }
+    
+    setEditModalOpen(false)
+    setEditandoSalida(null)
+  }
+
+  const handleEditUpdateCantidadKit = (index, nuevaCantidad) => {
+    if (nuevaCantidad === '') {
+      const nuevosProductos = [...editProductosKit]
+      nuevosProductos[index].cantidad_por_kit = ''
       setEditProductosKit(nuevosProductos)
-      setEditCantidad(1)
-      setSnackbar({ open: true, message: `Salida convertida a KIT con 2 productos`, severity: 'success' })
+      return
+    }
+    
+    const cantidad = parseInt(nuevaCantidad, 10)
+    if (!isNaN(cantidad) && cantidad > 0) {
+      const nuevosProductos = [...editProductosKit]
+      nuevosProductos[index].cantidad_por_kit = cantidad
+      if (editandoSalida?.tipo === 'kit') {
+        nuevosProductos[index].cantidad_total = cantidad * editCantidad
+      } else {
+        nuevosProductos[index].cantidad = cantidad
+      }
+      setEditProductosKit(nuevosProductos)
     }
   }
-  
-  setEditSearchTerm('')
-  setEditShowSearchResults(false)
-}
 
-const handleVerDetallePendiente = (item) => {
-  setDetalleSalida(item)
-  setDetalleModalOpen(true)
-}
-  // Generar PDF para una salida específica
+  const handleEditRemoveProductoKit = (index) => {
+    const nuevosProductos = editProductosKit.filter((_, i) => i !== index)
+    setEditProductosKit(nuevosProductos)
+  }
+
+  const handleEditSearch = async () => {
+    if (!editSearchTerm.trim()) return
+    
+    try {
+      const results = await salidasService.buscarProducto(editSearchTerm)
+      setEditSearchResults(results)
+      setEditShowSearchResults(true)
+    } catch (error) {
+      setSnackbar({ open: true, message: 'Error al buscar producto', severity: 'error' })
+    }
+  }
+
+  const handleAgregarProductoAEdicion = (producto) => {
+    if (editandoSalida.tipo === 'kit' || editandoSalida.tipo === 'multiple') {
+      const existente = editProductosKit.find(p => p.producto_id === producto.id)
+      if (existente) {
+        const nuevosProductos = editProductosKit.map(p =>
+          p.producto_id === producto.id 
+            ? { ...p, cantidad_por_kit: p.cantidad_por_kit + 1 }
+            : p
+        )
+        setEditProductosKit(nuevosProductos)
+        setSnackbar({ open: true, message: `${producto.nombre}: +1 unidad`, severity: 'success' })
+      } else {
+        setEditProductosKit(prev => [
+          ...prev,
+          {
+            producto_id: producto.id,
+            producto_nombre: producto.nombre,
+            producto_codigo: producto.codigo,
+            cantidad_por_kit: 1,
+            cantidad_total: 1,
+            stock_disponible: producto.stock_actual
+          }
+        ])
+        setSnackbar({ open: true, message: `${producto.nombre} agregado`, severity: 'success' })
+      }
+    } else {
+      const confirmar = window.confirm(
+        `Esta salida actualmente tiene el producto "${editandoSalida.producto_nombre}".\n\n` +
+        `¿Deseas agregar "${producto.nombre}"? Esto convertirá la salida en un KIT con múltiples productos.\n\n` +
+        `¿Continuar?`
+      )
+      
+      if (confirmar) {
+        const nuevosProductos = [
+          {
+            producto_id: editandoSalida.producto_id,
+            producto_nombre: editandoSalida.producto_nombre,
+            producto_codigo: editandoSalida.producto_codigo,
+            cantidad_por_kit: editandoSalida.cantidad,
+            cantidad_total: editandoSalida.cantidad,
+            stock_disponible: editandoSalida.stock_actual
+          },
+          {
+            producto_id: producto.id,
+            producto_nombre: producto.nombre,
+            producto_codigo: producto.codigo,
+            cantidad_por_kit: 1,
+            cantidad_total: 1,
+            stock_disponible: producto.stock_actual
+          }
+        ]
+        
+        setEditandoSalida(prev => ({
+          ...prev,
+          tipo: 'multiple',
+          nombre: `Salida múltiple (${editandoSalida.producto_nombre} + ${producto.nombre})`,
+          productos: nuevosProductos
+        }))
+        setEditProductosKit(nuevosProductos)
+        setSnackbar({ open: true, message: `Salida convertida a MÚLTIPLE con 2 productos`, severity: 'success' })
+      }
+    }
+    
+    setEditSearchTerm('')
+    setEditShowSearchResults(false)
+  }
+
+  const handleVerDetallePendiente = (item) => {
+    setDetalleSalida(item)
+    setDetalleModalOpen(true)
+  }
+
   const handleGenerarComprobante = async (movimientoId) => {
     setPdfLoading(true)
     try {
@@ -858,7 +1032,6 @@ const handleVerDetallePendiente = (item) => {
     }
   }
 
-  // Subir PDF firmado
   const handleSubirPDFFirmado = async (movimientoId) => {
     const input = document.createElement('input')
     input.type = 'file'
@@ -898,7 +1071,7 @@ const handleVerDetallePendiente = (item) => {
   }
 
   const handleScanMultiple = (productos) => {
-    if (isModoKit) {
+    if (isModoKit || isModoAyudasUnidades) {
       productos.forEach(producto => {
         const existente = productosKit.find(p => p.id === producto.id)
         if (existente) {
@@ -920,7 +1093,7 @@ const handleVerDetallePendiente = (item) => {
           ])
         }
       })
-      setSnackbar({ open: true, message: `${productos.length} productos agregados al kit`, severity: 'success' })
+      setSnackbar({ open: true, message: `${productos.length} productos agregados`, severity: 'success' })
     } else {
       const nuevasSalidas = productos.map(producto => ({
         id: Date.now() + Math.random(),
@@ -947,6 +1120,9 @@ const handleVerDetallePendiente = (item) => {
   const totalUnidadesPendientes = salidasPendientes.reduce((sum, s) => {
     if (s.tipo === 'kit') {
       return sum + s.productos.reduce((ss, p) => ss + p.cantidad_total, 0)
+    }
+    if (s.tipo === 'multiple') {
+      return sum + s.productos.reduce((ss, p) => ss + p.cantidad, 0)
     }
     return sum + s.cantidad
   }, 0)
@@ -1027,9 +1203,9 @@ const handleVerDetallePendiente = (item) => {
                 {searchResults.map((producto) => (
                   <ListItem
                     key={producto.id}
-                    button
+                    component="div"
                     onClick={() => handleSelectProduct(producto)}
-                    sx={{ '&:hover': { bgcolor: 'action.hover' } }}
+                    sx={{ '&:hover': { bgcolor: 'action.hover' }, cursor: 'pointer' }}
                   >
                     <ListItemText
                       primary={producto.nombre}
@@ -1047,7 +1223,7 @@ const handleVerDetallePendiente = (item) => {
             )}
             
             {/* Producto Seleccionado (Modo Normal) */}
-            {!isModoKit && productoSeleccionado && (
+            {isModoNormal && productoSeleccionado && (
               <Box sx={{ mt: 2, p: 2, bgcolor: 'primary.50', borderRadius: 2, border: '1px solid', borderColor: 'primary.main' }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
                   <Typography variant="subtitle1" fontWeight="bold">
@@ -1069,13 +1245,14 @@ const handleVerDetallePendiente = (item) => {
               </Box>
             )}
             
-            {/* Productos del Kit (Modo Kit) */}
-            {isModoKit && productosKit.length > 0 && (
-              <Box sx={{ mt: 2, p: 2, bgcolor: 'success.50', borderRadius: 2, border: '1px solid', borderColor: 'success.main' }}>
+            {/* Productos del Kit/Lista (Modo Kit o Modo Ayudas/Unidades) */}
+            {(isModoKit || isModoAyudasUnidades) && productosKit.length > 0 && (
+              <Box sx={{ mt: 2, p: 2, bgcolor: isModoKit ? 'success.50' : 'info.50', borderRadius: 2, border: '1px solid', borderColor: isModoKit ? 'success.main' : 'info.main' }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                   <Typography variant="subtitle1" fontWeight="bold" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <KitIcon /> Productos del Kit
-                    <Chip label={productosKit.length} size="small" color="success" />
+                    {isModoKit ? <KitIcon /> : <BoxIcon />} 
+                    {isModoKit ? 'Productos del Kit' : 'Productos seleccionados'}
+                    <Chip label={productosKit.length} size="small" color={isModoKit ? "success" : "info"} />
                   </Typography>
                   <Button size="small" color="error" onClick={handleClearKit}>
                     Limpiar
@@ -1087,32 +1264,39 @@ const handleVerDetallePendiente = (item) => {
                     <Box sx={{ flex: 1 }}>
                       <Typography variant="body2" fontWeight="medium">{producto.nombre}</Typography>
                       <Typography variant="caption" color="text.secondary">{producto.codigo}</Typography>
+                      <Typography 
+                        variant="caption" 
+                        color={producto.stock_actual <= (producto.stock_minimo || 5) ? 'error' : 'text.secondary'}
+                        sx={{ display: 'block', fontWeight: producto.stock_actual <= (producto.stock_minimo || 5) ? 'bold' : 'normal' }}
+                      >
+                        Stock disponible: {producto.stock_actual}
+                      </Typography>
                     </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <TextField
-                        type="text"  // Cambiado de "number" a "text"
-        size="small"
-        value={producto.cantidad_por_kit}
-        onChange={(e) => handleUpdateCantidadKit(index, e.target.value)}
-        onBlur={() => {
-          // Si queda vacío o es 0, poner 1
-          if (!producto.cantidad_por_kit || producto.cantidad_por_kit === 0 || producto.cantidad_por_kit === '') {
-            setProductosKit(prev =>
-              prev.map((p, i) => i === index ? { ...p, cantidad_por_kit: 1 } : p)
-            )
-          }
-        }}
-        sx={{ width: 80 }}
-        InputProps={{
-          inputProps: { 
-            inputMode: 'numeric',
-            pattern: '[0-9]*',
-            style: { textAlign: 'center' }
-          }
-        }}
-      />
-      <Typography variant="body2">unid/kit</Typography>
-      <IconButton size="small" color="error" onClick={() => handleRemoveProductoKit(index)}>
+                        type="text"
+                        size="small"
+                        value={producto.cantidad_por_kit}
+                        onChange={(e) => handleUpdateCantidadKit(index, e.target.value)}
+                        onBlur={() => {
+                          if (!producto.cantidad_por_kit || producto.cantidad_por_kit === 0 || producto.cantidad_por_kit === '') {
+                            setProductosKit(prev =>
+                              prev.map((p, i) => i === index ? { ...p, cantidad_por_kit: 1 } : p)
+                            )
+                          }
+                        }}
+                        sx={{ width: 80 }}
+                        InputProps={{
+                          inputProps: { 
+                            inputMode: 'numeric',
+                            pattern: '[0-9]*',
+                            style: { textAlign: 'center' }
+                          }
+                        }}
+                      />
+                      <Typography variant="body2">{isModoKit ? 'unid/kit' : 'unidades'}</Typography>
+                      <IconButton size="small" color="error" onClick={() => handleRemoveProductoKit(index)}>
+                        <DeleteIcon />
                       </IconButton>
                     </Box>
                   </Box>
@@ -1134,7 +1318,12 @@ const handleVerDetallePendiente = (item) => {
                   select
                   label="Motivo de Salida *"
                   value={formData.motivo}
-                  onChange={(e) => setFormData({ ...formData, motivo: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, motivo: e.target.value })
+                    // Limpiar productos al cambiar de modo
+                    setProductosKit([])
+                    setProductoSeleccionado(null)
+                  }}
                 >
                   {motivos.map((m) => (
                     <MenuItem key={m} value={m}>{m}</MenuItem>
@@ -1142,27 +1331,25 @@ const handleVerDetallePendiente = (item) => {
                 </TextField>
               </Grid>
               
-              {!isModoKit && (
+              {isModoNormal && (
                 <Grid item xs={12}>
                   <TextField
-      fullWidth
-      type="number"
-      label="Cantidad *"
-      value={formData.cantidad} // Quitamos la condición ternaria que tenías
-  onChange={(e) => {
-    const value = e.target.value;
-    // Permitimos que quede vacío temporalmente, de lo contrario lo convertimos a número
-    setFormData(prev => ({ ...prev, cantidad: value === '' ? '' : Number(value) }));
-  }}
-  onBlur={() => {
-    // Cuando el usuario hace clic por fuera, si está vacío o es 0, lo devolvemos a 1
-    if (!formData.cantidad || formData.cantidad <= 0) {
-      setFormData(prev => ({ ...prev, cantidad: 1 }));
-    }
-  }}
-  inputProps={{ min: 1, step: 1 }}
-      error={!stockCheck.valido}
-      helperText={!stockCheck.valido ? stockCheck.mensaje : `Stock disponible: ${productoSeleccionado?.stock_actual || 0}`}
+                    fullWidth
+                    type="number"
+                    label="Cantidad *"
+                    value={formData.cantidad}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setFormData(prev => ({ ...prev, cantidad: value === '' ? '' : Number(value) }))
+                    }}
+                    onBlur={() => {
+                      if (!formData.cantidad || formData.cantidad <= 0) {
+                        setFormData(prev => ({ ...prev, cantidad: 1 }))
+                      }
+                    }}
+                    inputProps={{ min: 1, step: 1 }}
+                    error={!stockCheck.valido}
+                    helperText={!stockCheck.valido ? stockCheck.mensaje : `Stock disponible: ${productoSeleccionado?.stock_actual || 0}`}
                   />
                 </Grid>
               )}
@@ -1171,41 +1358,37 @@ const handleVerDetallePendiente = (item) => {
                 <>
                   <Grid item xs={12}>
                     <TextField
-        fullWidth
-        label="Nombre del Kit/Mercado *"
-        value={formData.kitNombre}
-        onChange={(e) => setFormData({ ...formData, kitNombre: e.target.value })}
-        placeholder="Ej: Mercado Básico, Kit Emergencia, Ayuda Familiar"
-      />
-    </Grid>
-    <Grid item xs={12}>
-      <TextField
-        fullWidth
-        type="number"
-        label="Cantidad de Kits *"
-         value={formData.cantidadKits === 0 ? '' : formData.cantidadKits}
-        onChange={(e) => {
-          const value = e.target.value
-          if (value === '') {
-            setFormData(prev => ({ ...prev, cantidadKits: '' }))
-          } else {
-            const numValue = parseInt(value, 10)
-            if (!isNaN(numValue) && numValue > 0) {
-              setFormData(prev => ({ ...prev, cantidadKits: numValue }))
-            }
-          }
-        }}
-        onBlur={() => {
-          if (!formData.cantidadKits || formData.cantidadKits <= 0) {
-            setFormData(prev => ({ ...prev, cantidadKits: 1 }))
-          }
-        }}
-        inputProps={{ 
-          min: 1, 
-          step: 1,
-          style: { appearance: 'textfield', MozAppearance: 'textfield' }
-        }}
-  />
+                      fullWidth
+                      label="Nombre del Kit/Mercado *"
+                      value={formData.kitNombre}
+                      onChange={(e) => setFormData({ ...formData, kitNombre: e.target.value })}
+                      placeholder="Ej: Mercado Básico, Kit Emergencia, Ayuda Familiar"
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      type="number"
+                      label="Cantidad de Kits *"
+                      value={formData.cantidadKits === 0 ? '' : formData.cantidadKits}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        if (value === '') {
+                          setFormData(prev => ({ ...prev, cantidadKits: '' }))
+                        } else {
+                          const numValue = parseInt(value, 10)
+                          if (!isNaN(numValue) && numValue > 0) {
+                            handleUpdateCantidadKits(value)
+                          }
+                        }
+                      }}
+                      onBlur={() => {
+                        if (!formData.cantidadKits || formData.cantidadKits <= 0) {
+                          setFormData(prev => ({ ...prev, cantidadKits: 1 }))
+                        }
+                      }}
+                      inputProps={{ min: 1, step: 1 }}
+                    />
                   </Grid>
                 </>
               )}
@@ -1213,11 +1396,11 @@ const handleVerDetallePendiente = (item) => {
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Cliente/Destino"
+                  label="Cliente/Destino/Beneficiario"
                   value={formData.cliente}
                   onChange={(e) => setFormData({ ...formData, cliente: e.target.value })}
-                  placeholder={isModoKit ? "Nombre del beneficiario *" : "Nombre del cliente o destino..."}
-                  required={isModoKit}
+                  placeholder={isModoKit || isModoAyudasUnidades ? "Nombre del beneficiario *" : "Nombre del cliente o destino..."}
+                  required={isModoKit || isModoAyudasUnidades}
                 />
               </Grid>
               
@@ -1250,7 +1433,10 @@ const handleVerDetallePendiente = (item) => {
                 color="warning"
                 startIcon={<AddIcon />}
                 onClick={handleAgregarALista}
-                disabled={(!isModoKit && !productoSeleccionado) || (isModoKit && productosKit.length === 0) || (isModoKit && !formData.kitNombre)}
+                disabled={hayErroresStock() || 
+                  (isModoNormal && !productoSeleccionado) || 
+                  ((isModoKit || isModoAyudasUnidades) && productosKit.length === 0) ||
+                  (isModoKit && !formData.kitNombre)}
               >
                 Agregar a la Lista
               </Button>
@@ -1286,7 +1472,7 @@ const handleVerDetallePendiente = (item) => {
             ) : (
               <List sx={{ maxHeight: 500, overflow: 'auto' }}>
                 {salidasPendientes.map((item, index) => (
-                  <Paper key={item.id} sx={{ mb: 2, p: 2, bgcolor: item.tipo === 'kit' ? 'info.50' : 'grey.50' }}>
+                  <Paper key={item.id} sx={{ mb: 2, p: 2, bgcolor: item.tipo === 'kit' ? 'info.50' : item.tipo === 'multiple' ? 'secondary.50' : 'grey.50' }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 1 }}>
                       <Box sx={{ flex: 1 }}>
                         {item.tipo === 'kit' ? (
@@ -1301,6 +1487,21 @@ const handleVerDetallePendiente = (item) => {
                               {item.cantidad_kits} kits × {item.productos.length} productos ({item.productos.reduce((sum, p) => sum + p.cantidad_total, 0)} unidades totales)
                             </Typography>
                           </>
+                        ) : item.tipo === 'multiple' ? (
+                          <>
+                            <Typography variant="subtitle2" fontWeight="bold" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <BoxIcon /> {item.nombre}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              {item.motivo} • Beneficiario: {item.cliente || 'No especificado'}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              {item.productos.length} productos ({item.productos.reduce((sum, p) => sum + p.cantidad, 0)} unidades totales)
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                              {item.productos.map(p => `${p.producto_nombre} (${p.cantidad})`).join(', ').substring(0, 80)}...
+                            </Typography>
+                          </>
                         ) : (
                           <>
                             <Typography variant="subtitle2" fontWeight="bold">
@@ -1311,18 +1512,22 @@ const handleVerDetallePendiente = (item) => {
                             </Typography>
                             <Typography variant="caption" color={item.stock_restante <= (item.stock_minimo || 5) ? 'error' : 'text.secondary'}>
                               Stock restante disponible: {item.stock_restante} unidades
-  {item.stock_fisico && item.stock_fisico !== item.stock_actual && (
-    <span style={{ fontSize: '10px', display: 'block', color: '#666' }}>
-      (Stock físico: {item.stock_fisico} | Reservado: {item.stock_fisico - item.stock_actual})
-    </span>
-  )}
+                              {item.stock_fisico && item.stock_fisico !== item.stock_actual && (
+                                <span style={{ fontSize: '10px', display: 'block', color: '#666' }}>
+                                  (Stock físico: {item.stock_fisico} | Reservado: {item.stock_fisico - item.stock_actual})
+                                </span>
+                              )}
                             </Typography>
                           </>
                         )}
                       </Box>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Chip 
-                          label={item.tipo === 'kit' ? `${item.cantidad_kits} kits` : `${item.cantidad} unid.`} 
+                          label={
+                            item.tipo === 'kit' ? `${item.cantidad_kits} kits` : 
+                            item.tipo === 'multiple' ? `${item.productos.length} prod.` : 
+                            `${item.cantidad} unid.`
+                          } 
                           size="small" 
                           color="warning" 
                         />
@@ -1332,7 +1537,7 @@ const handleVerDetallePendiente = (item) => {
                         <IconButton size="small" onClick={() => handleEditarSalida(item)} title="Editar" color="primary">
                           <EditIcon />
                         </IconButton>
-                        <IconButton size="small" color="success" onClick={() => handleConfirmarSalida(item, index)} title="Confirmar salida" disabled={loading}>
+                        <IconButton size="small" color="success" onClick={() => handleConfirmarSalida(item, index)} title="Confirmar salida" disabled={loading || !isSuperAdmin}>
                           <CheckCircleIcon />
                         </IconButton>
                         <IconButton size="small" color="error" onClick={() => handleEliminarPendiente(index)} title="Eliminar">
@@ -1455,7 +1660,7 @@ const handleVerDetallePendiente = (item) => {
             <>
               <Box sx={{ mb: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
                 <Typography variant="body2"><strong>Motivo:</strong> {detalleSalida.motivo}</Typography>
-                <Typography variant="body2"><strong>Cliente/Destino:</strong> {detalleSalida.cliente || 'No especificado'}</Typography>
+                <Typography variant="body2"><strong>Cliente/Destino/Beneficiario:</strong> {detalleSalida.cliente || 'No especificado'}</Typography>
                 <Typography variant="body2"><strong>Fecha:</strong> {new Date(detalleSalida.fecha).toLocaleString()}</Typography>
                 {detalleSalida.notas && <Typography variant="body2"><strong>Notas:</strong> {detalleSalida.notas}</Typography>}
               </Box>
@@ -1490,6 +1695,34 @@ const handleVerDetallePendiente = (item) => {
                     </Table>
                   </TableContainer>
                 </>
+              ) : detalleSalida.tipo === 'multiple' ? (
+                <>
+                  <Typography variant="subtitle1" gutterBottom>Productos:</Typography>
+                  <TableContainer component={Paper} variant="outlined">
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Producto</TableCell>
+                          <TableCell>Código</TableCell>
+                          <TableCell align="right">Cantidad</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {detalleSalida.productos.map((p, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell>{p.producto_nombre}</TableCell>
+                            <TableCell>{p.producto_codigo}</TableCell>
+                            <TableCell align="right">{p.cantidad}</TableCell>
+                          </TableRow>
+                        ))}
+                        <TableRow sx={{ bgcolor: 'grey.50' }}>
+                          <TableCell colSpan={2}><strong>Total</strong></TableCell>
+                          <TableCell align="right"><strong>{detalleSalida.productos.reduce((sum, p) => sum + p.cantidad, 0)}</strong></TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </>
               ) : (
                 <Box>
                   <Typography variant="body1" gutterBottom>
@@ -1511,7 +1744,7 @@ const handleVerDetallePendiente = (item) => {
         </DialogActions>
       </Dialog>
       
-      {/* 🆕 Modal de Edición de Salida */}
+      {/* Modal de Edición de Salida */}
       <Dialog open={editModalOpen} onClose={() => setEditModalOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>
           Editar Salida
@@ -1527,7 +1760,9 @@ const handleVerDetallePendiente = (item) => {
             <>
               <Box sx={{ mb: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
                 <Typography variant="subtitle2" gutterBottom>
-                  {editandoSalida.tipo === 'kit' ? `Kit: ${editandoSalida.nombre}` : `Producto: ${editandoSalida.producto_nombre}`}
+                  {editandoSalida.tipo === 'kit' ? `Kit: ${editandoSalida.nombre}` : 
+                   editandoSalida.tipo === 'multiple' ? `Múltiple: ${editandoSalida.nombre}` :
+                   `Producto: ${editandoSalida.producto_nombre}`}
                 </Typography>
               </Box>
               
@@ -1549,45 +1784,79 @@ const handleVerDetallePendiente = (item) => {
                 <Grid item xs={12}>
                   <TextField
                     fullWidth
-                    label={editandoSalida.tipo === 'kit' ? "Beneficiario" : "Cliente/Destino"}
+                    label={editandoSalida.tipo === 'kit' || editandoSalida.tipo === 'multiple' ? "Beneficiario" : "Cliente/Destino"}
                     value={editFormData.cliente}
                     onChange={(e) => setEditFormData({ ...editFormData, cliente: e.target.value })}
                   />
                 </Grid>
                 
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    type="number"
-                    label={editandoSalida.tipo === 'kit' ? "Cantidad de Kits" : "Cantidad"}
-                    value={editCantidad === 0 ? '' : editCantidad}
-    onChange={(e) => {
-      const value = e.target.value
-      if (value === '') {
-        setEditCantidad('')
-      } else {
-        const numValue = parseInt(value, 10)
-        if (!isNaN(numValue) && numValue > 0) {
-          setEditCantidad(numValue)
-        }
-      }
-    }}
-    onBlur={() => {
-      if (!editCantidad || editCantidad <= 0) {
-        setEditCantidad(1)
-      }
-    }}
-    inputProps={{ 
-      min: 1, 
-      step: 1,
-      style: { appearance: 'textfield', MozAppearance: 'textfield' }
-    }}
-                  />
-                </Grid>
-                
-                {editandoSalida.tipo === 'kit' && editProductosKit.length > 0 && (
+                {(editandoSalida.tipo === 'kit' || editandoSalida.tipo === 'multiple') && (
                   <Grid item xs={12}>
-                    <Typography variant="subtitle2" gutterBottom>Productos del Kit:</Typography>
+                    <TextField
+                      fullWidth
+                      type="number"
+                      label={editandoSalida.tipo === 'kit' ? "Cantidad de Kits" : "Cantidad (multiplicador)"}
+                      value={editCantidad === 0 ? '' : editCantidad}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        if (value === '') {
+                          setEditCantidad('')
+                        } else {
+                          const numValue = parseInt(value, 10)
+                          if (!isNaN(numValue) && numValue > 0) {
+                            setEditCantidad(numValue)
+                            // Actualizar cantidades totales en los productos
+                            const nuevosProductos = editProductosKit.map(p => ({
+                              ...p,
+                              cantidad_total: p.cantidad_por_kit * numValue
+                            }))
+                            setEditProductosKit(nuevosProductos)
+                          }
+                        }
+                      }}
+                      onBlur={() => {
+                        if (!editCantidad || editCantidad <= 0) {
+                          setEditCantidad(1)
+                        }
+                      }}
+                      inputProps={{ min: 1, step: 1 }}
+                    />
+                  </Grid>
+                )}
+                
+                {!editandoSalida.tipo !== 'kit' && !editandoSalida.tipo !== 'multiple' && (
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      type="number"
+                      label="Cantidad"
+                      value={editCantidad === 0 ? '' : editCantidad}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        if (value === '') {
+                          setEditCantidad('')
+                        } else {
+                          const numValue = parseInt(value, 10)
+                          if (!isNaN(numValue) && numValue > 0) {
+                            setEditCantidad(numValue)
+                          }
+                        }
+                      }}
+                      onBlur={() => {
+                        if (!editCantidad || editCantidad <= 0) {
+                          setEditCantidad(1)
+                        }
+                      }}
+                      inputProps={{ min: 1, step: 1 }}
+                    />
+                  </Grid>
+                )}
+                
+                {(editandoSalida.tipo === 'kit' || editandoSalida.tipo === 'multiple') && editProductosKit.length > 0 && (
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" gutterBottom>
+                      {editandoSalida.tipo === 'kit' ? 'Productos del Kit:' : 'Productos:'}
+                    </Typography>
                     {editProductosKit.map((producto, idx) => (
                       <Box key={idx} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, p: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
                         <Box sx={{ flex: 1 }}>
@@ -1596,96 +1865,108 @@ const handleVerDetallePendiente = (item) => {
                         </Box>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <TextField
-                            type="text"  // Cambiado de "number" a "text"
-            size="small"
-            value={producto.cantidad_por_kit}
-            onChange={(e) => {
-              const value = e.target.value
-              if (value === '') {
-                const nuevosProductos = [...editProductosKit]
-                nuevosProductos[idx].cantidad_por_kit = ''
-                setEditProductosKit(nuevosProductos)
-              } else if (/^\d+$/.test(value)) {
-                const numValue = parseInt(value, 10)
-                if (numValue > 0) {
-                  const nuevosProductos = [...editProductosKit]
-                  nuevosProductos[idx].cantidad_por_kit = numValue
-                  nuevosProductos[idx].cantidad_total = numValue * editCantidad
-                  setEditProductosKit(nuevosProductos)
-                }
-              }
-            }}
-            onBlur={() => {
-              if (!producto.cantidad_por_kit || producto.cantidad_por_kit === 0 || producto.cantidad_por_kit === '') {
-                const nuevosProductos = [...editProductosKit]
-                nuevosProductos[idx].cantidad_por_kit = 1
-                nuevosProductos[idx].cantidad_total = 1 * editCantidad
-                setEditProductosKit(nuevosProductos)
-              }
-            }}
-            sx={{ width: 80 }}
-            InputProps={{
-              inputProps: { 
-                inputMode: 'numeric',
-                pattern: '[0-9]*',
-                style: { textAlign: 'center' }
-              }
-            }}
-          />
-          <Typography variant="body2">unid/kit</Typography>
-          <IconButton size="small" color="error" onClick={() => handleEditRemoveProductoKit(idx)}>
-            <DeleteIcon />
+                            type="text"
+                            size="small"
+                            value={producto.cantidad_por_kit}
+                            onChange={(e) => {
+                              const value = e.target.value
+                              if (value === '') {
+                                const nuevosProductos = [...editProductosKit]
+                                nuevosProductos[idx].cantidad_por_kit = ''
+                                setEditProductosKit(nuevosProductos)
+                              } else if (/^\d+$/.test(value)) {
+                                const numValue = parseInt(value, 10)
+                                if (numValue > 0) {
+                                  const nuevosProductos = [...editProductosKit]
+                                  nuevosProductos[idx].cantidad_por_kit = numValue
+                                  if (editandoSalida.tipo === 'kit') {
+                                    nuevosProductos[idx].cantidad_total = numValue * editCantidad
+                                  } else {
+                                    nuevosProductos[idx].cantidad = numValue
+                                  }
+                                  setEditProductosKit(nuevosProductos)
+                                }
+                              }
+                            }}
+                            onBlur={() => {
+                              if (!producto.cantidad_por_kit || producto.cantidad_por_kit === 0 || producto.cantidad_por_kit === '') {
+                                const nuevosProductos = [...editProductosKit]
+                                nuevosProductos[idx].cantidad_por_kit = 1
+                                if (editandoSalida.tipo === 'kit') {
+                                  nuevosProductos[idx].cantidad_total = 1 * editCantidad
+                                } else {
+                                  nuevosProductos[idx].cantidad = 1
+                                }
+                                setEditProductosKit(nuevosProductos)
+                              }
+                            }}
+                            sx={{ width: 80 }}
+                            InputProps={{
+                              inputProps: { 
+                                inputMode: 'numeric',
+                                pattern: '[0-9]*',
+                                style: { textAlign: 'center' }
+                              }
+                            }}
+                          />
+                          <Typography variant="body2">
+                            {editandoSalida.tipo === 'kit' ? 'unid/kit' : 'unidades'}
+                          </Typography>
+                          <IconButton size="small" color="error" onClick={() => handleEditRemoveProductoKit(idx)}>
+                            <DeleteIcon />
                           </IconButton>
                         </Box>
                       </Box>
                     ))}
                   </Grid>
                 )}
-                {/* 🆕 SECCIÓN PARA AGREGAR PRODUCTOS */}
-<Grid item xs={12}>
-  <Divider sx={{ my: 2 }} />
-  <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-    <AddIcon /> Agregar otro producto
-  </Typography>
+                
+                {/* Sección para agregar productos */}
+                <Grid item xs={12}>
+                  <Divider sx={{ my: 2 }} />
+                  <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <AddIcon /> Agregar otro producto
+                  </Typography>
 
-  <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-    <TextField
-      size="small"
-      fullWidth
-      placeholder="Buscar producto por código o nombre..."
-      value={editSearchTerm}
-      onChange={(e) => setEditSearchTerm(e.target.value)}
-      onKeyPress={(e) => e.key === 'Enter' && handleEditSearch()}
-    />
-    <Button variant="outlined" onClick={handleEditSearch}>
-      Buscar
-    </Button>
-  </Box>
+                  <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+                    <TextField
+                      size="small"
+                      fullWidth
+                      placeholder="Buscar producto por código o nombre..."
+                      value={editSearchTerm}
+                      onChange={(e) => setEditSearchTerm(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleEditSearch()}
+                    />
+                    <Button variant="outlined" onClick={handleEditSearch}>
+                      Buscar
+                    </Button>
+                  </Box>
 
-  {editShowSearchResults && editSearchResults.length > 0 && (
-    <Paper sx={{ mb: 2, maxHeight: 200, overflow: 'auto' }}>
-      {editSearchResults.map((producto) => (
-        <ListItem
-          key={producto.id}
-          button
-          onClick={() => handleAgregarProductoAEdicion(producto)}
-          sx={{ '&:hover': { bgcolor: 'action.hover' } }}
-        >
-          <ListItemText
-            primary={producto.nombre}
-            secondary={`${producto.codigo} • Stock: ${producto.stock_actual}`}
-          />
-        </ListItem>
-      ))}
-    </Paper>
-  )}
+                  {editShowSearchResults && editSearchResults.length > 0 && (
+                    <Paper sx={{ mb: 2, maxHeight: 200, overflow: 'auto' }}>
+                      {editSearchResults.map((producto) => (
+                        <ListItem
+                          key={producto.id}
+                          component="div"
+                          onClick={() => handleAgregarProductoAEdicion(producto)}
+                          sx={{ '&:hover': { bgcolor: 'action.hover' }, cursor: 'pointer' }}
+                        >
+                          <ListItemText
+                            primary={producto.nombre}
+                            secondary={`${producto.codigo} • Stock: ${producto.stock_actual}`}
+                          />
+                        </ListItem>
+                      ))}
+                    </Paper>
+                  )}
 
-  {editShowSearchResults && editSearchResults.length === 0 && editSearchTerm && (
-    <Alert severity="info" sx={{ mb: 2 }}>
-      No se encontró "{editSearchTerm}"
-    </Alert>
-  )}
-</Grid>
+                  {editShowSearchResults && editSearchResults.length === 0 && editSearchTerm && (
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                      No se encontró "{editSearchTerm}"
+                    </Alert>
+                  )}
+                </Grid>
+                
                 <Grid item xs={12}>
                   <TextField
                     fullWidth

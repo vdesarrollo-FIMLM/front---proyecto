@@ -54,6 +54,7 @@ import {
   QrCode as QrCodeIcon
 } from '@mui/icons-material'
 import CloseIcon from '@mui/icons-material/Close'
+import { useAuth } from 'src/hooks/useAuth'
 import { DatePicker } from '@mui/x-date-pickers/DatePicker'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns'

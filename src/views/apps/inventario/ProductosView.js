@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
+import { useAuth } from 'src/hooks/useAuth'
 import {
   Container,
   Typography,
@@ -43,6 +44,14 @@ import {
 import { productosService } from 'src/services/inventario/productos.service'
 
 const ProductosView = () => {
+  const { user, hasPermission } = useAuth()
+  const isSuperAdmin = user?.rol === 'super_admin'
+
+ // ✅ define las variables de permisos 
+  const canEdit = hasPermission('edit_product')
+  const canDelete = hasPermission('delete_product')
+  const canCreate = hasPermission('create_product')
+
   const [productos, setProductos] = useState([])
   const [filteredProductos, setFilteredProductos] = useState([])
   const [loading, setLoading] = useState(true)
@@ -175,6 +184,7 @@ const ProductosView = () => {
   >
     Carga Masiva
   </Button>
+  {canCreate && (
   <Button
     variant="contained"
     startIcon={<AddIcon />}
@@ -182,6 +192,7 @@ const ProductosView = () => {
   >
     Nuevo Producto
   </Button>
+  )}
         </Box>
       </Box>
 
@@ -345,15 +356,17 @@ const ProductosView = () => {
                         <QrCodeIcon />
                       </IconButton>
                     </Tooltip>
+                    {canEdit && (
                     <Tooltip title="Editar">
                       <IconButton
                         size="small"
                         color="warning"
-                        onClick={() => router.push(`/inventario/productos/editar/${producto.id}`)}
-                      >
+                        onClick={() => router.push(`/inventario/productos/editar/${producto.id}`)}>
                         <EditIcon />
                       </IconButton>
                     </Tooltip>
+                    )}
+                    {canDelete && (
                     <Tooltip title="Eliminar">
                       <IconButton
                         size="small"
@@ -363,6 +376,7 @@ const ProductosView = () => {
                         <DeleteIcon />
                       </IconButton>
                     </Tooltip>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

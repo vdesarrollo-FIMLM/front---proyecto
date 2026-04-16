@@ -1,62 +1,90 @@
-// ** React Imports
+// src/context/AuthContext.js
 import { createContext, useEffect, useState } from 'react'
-
-// ** Next Import
 import { useRouter } from 'next/router'
+import api from 'src/configs/axios'
 
-// ** Axios
-import axios from 'axios'
+// ✅ Exportación nombrada de AuthContext
+export const AuthContext = createContext()
 
-// ** Config
-import authConfig from 'src/configs/auth'
-import { useSettings } from 'src/@core/hooks/useSettings'
-
-// ** Cookies
-import Cookies from 'js-cookie'
-
-// ** Defaults
-const defaultProvider = {
-  user: null,
-  loading: false,
-  setUser: () => null,
-  setLoading: () => Boolean
-}
-const AuthContext = createContext(defaultProvider)
-
-const modeMaintenance = process.env.NEXT_PUBLIC_MODE_MAINTENANCE
-
-const AuthProvider = ({ children }) => {
-  // ** States
-  const [user, setUser] = useState(defaultProvider.user)
-  const [loading, setLoading] = useState(false)
-
-  // ** Hooks
+// ✅ Exportación nombrada de AuthProvider
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
   const router = useRouter()
+
   useEffect(() => {
-    setUser({
-      id: '1',
-      id_persona: '1',
-      fullname: 'John Doe',
-      username: 'John Doe',
-      nombre: 'Super',
-      role: ['all'],
-      permissions: ['home-ver'],
-      acepta_terminos: true,
-      idioma: 'es'
-    })
-    setLoading(false)
-    router.push('/')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const token = localStorage.getItem('accessToken')
+    if (token) {
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`
+      fetchUser()
+    } else {
+      setLoading(false)
+    }
   }, [])
 
-  const values = {
-    user,
-    loading,
-    setUser,
-    setLoading
+  const fetchUser = async () => {
+    try {
+      const response = await api.get('/auth/me')
+      setUser(response.data)
+    } catch (error) {
+      console.error('Error fetching user:', error)
+      localStorage.removeItem('accessToken')
+      delete api.defaults.headers.common['Authorization']
+    } finally {
+      setLoading(false)
+    }
   }
 
-  return <AuthContext.Provider value={values}>{children}</AuthContext.Provider>
-}
+  const login = async (username, password) => {
+    try {
+      const response = await api.post('/auth/login', { username, password })
+      
+      const { access_token, user: userData } = response.data
+      localStorage.setItem('accessToken', access_token)
+      api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`
+      setUser(userData)
+      
+      // Redirigir según el rol
+      if (userData.rol === 'super_admin') {
+        router.push('/inventario/dashboard')
+      } else if (userData.rol === 'admin') {
+        router.push('/inventario/movimientos')
+      } else {
+        router.push('/inventario/entrada')
+      }
+      
+      return { success: true }
+    } catch (error) {
+      console.error('Login error:', error)
+      return { 
+        success: false, 
+        error: error.response?.data?.detail || 'Error de autenticación'
+      }
+    }
+  }
 
-export { AuthContext, AuthProvider }
+  const logout = () => {
+    localStorage.removeItem('accessToken')
+    delete api.defaults.headers.common['Authorization']
+    setUser(null)
+    router.push('/login')
+  }
+
+  const hasPermission = (permission) => {
+    if (!user) return false
+    
+    const permissions = {
+      super_admin: ['create_product', 'delete_product', 'edit_product', 'confirm_entries', 'confirm_exits', 'view_movements', 'view_dashboard', 'manage_users', 'view_products'],
+      admin: ['view_movements', 'view_dashboard'],
+      operativo: ['create_entry', 'create_exit']
+    }
+    
+    return permissions[user.rol]?.includes(permission) || false
+  }
+
+  return (
+    <AuthContext.Provider value={{ user, loading, login, logout, hasPermission }}>
+      {children}
+    </AuthContext.Provider>
+  )
+}

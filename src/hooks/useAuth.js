@@ -1,13 +1,11 @@
+// src/hooks/useAuth.js
 import { useContext } from 'react'
 import { AuthContext } from 'src/context/AuthContext'
 
 export const useAuth = () => {
-  // 🔥 TEMPORAL: Simular usuario autenticado para evitar redirecciones
-  return {
-    user: { name: 'Usuario Test', role: 'admin' },
-    loading: false
+  const context = useContext(AuthContext)
+  if (!context) {
+    throw new Error('useAuth must be used within AuthProvider')
   }
-  
-  // Código original comentado
-  // return useContext(AuthContext)
+  return context
 }

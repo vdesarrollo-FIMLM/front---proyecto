@@ -51,15 +51,36 @@ export const entradasService = {
   },
 
   // Buscar producto por código o nombre
-  async buscarProducto(query) {
-    try {
-      const response = await api.get(`/productos/buscar?q=${encodeURIComponent(query)}`)
-      return response.data
-    } catch (error) {
-      console.error('Error buscando producto:', error)
-      return []
+  // services/inventario/entradas.service.js
+async buscarProducto(query) {
+  try {
+    console.log('🔍 Buscando producto con query:', query)
+    const response = await api.get(`/productos/buscar?q=${encodeURIComponent(query)}`)
+    console.log('📦 Datos recibidos del backend:', response.data)
+    
+    // Verificar que cada producto tenga los campos necesarios
+    if (response.data && Array.isArray(response.data)) {
+      response.data.forEach((p, idx) => {
+        console.log(`Producto ${idx + 1}:`, {
+          id: p.id || p._id,
+          codigo: p.codigo,
+          nombre: p.nombre,
+          stock_actual: p.stock_actual
+        })
+        
+        // Si no tiene el campo 'codigo', intentar obtenerlo de otra forma
+        if (!p.codigo && p._id) {
+          console.warn(`⚠️ Producto ${p.nombre} no tiene campo 'codigo'`)
+        }
+      })
     }
-  },
+    
+    return response.data
+  } catch (error) {
+    console.error('Error buscando producto:', error)
+    return []
+  }
+},
 
   // Obtener producto por ID
   async getProductoById(id) {
