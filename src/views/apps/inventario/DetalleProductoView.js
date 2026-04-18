@@ -37,6 +37,7 @@ import {
 } from '@mui/icons-material'
 import { productosService } from 'src/services/inventario/productos.service'
 import { movimientosService } from 'src/services/inventario/movimientos.service'
+import GestionUbicaciones from './components/GestionUbicaciones'
 
 const DetalleProductoView = () => {
   const router = useRouter()
@@ -44,6 +45,7 @@ const DetalleProductoView = () => {
   const [producto, setProducto] = useState(null)
   const [movimientos, setMovimientos] = useState([])
   const [loading, setLoading] = useState(true)
+  const [ubicacionesOpen, setUbicacionesOpen] = useState(false)
   const [qrImage, setQrImage] = useState('')
   const [qrDialogOpen, setQrDialogOpen] = useState(false)
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' })
@@ -172,9 +174,34 @@ const DetalleProductoView = () => {
               Salida
             </Button>
           </Tooltip>
+          <Tooltip title="Gestionar Ubicaciones">
+  <Button
+    variant="outlined"
+    startIcon={<LocationIcon />}
+    onClick={() => setUbicacionesOpen(true)}
+  >
+    Ubicaciones
+  </Button>
+</Tooltip>
         </Box>
       </Box>
-
+       {producto && (!producto.ubicaciones || producto.ubicaciones.length === 0) && (
+      <Alert 
+        severity="warning" 
+        sx={{ mb: 3 }}
+        action={
+          <Button 
+            color="inherit" 
+            size="small" 
+            onClick={() => setUbicacionesOpen(true)}
+          >
+            Asignar ubicación
+          </Button>
+        }
+      >
+        ⚠️ Este producto no tiene ubicaciones asignadas. El stock no podrá ser retirado hasta que se asigne una ubicación.
+      </Alert>
+    )}
       {/* Información del Producto */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} md={4}>
@@ -328,9 +355,12 @@ const DetalleProductoView = () => {
         )}
       </Paper>
 
-      {/* QR Dialog */}
-      {/* ... (similar al de productos) */}
-
+     <GestionUbicaciones
+      open={ubicacionesOpen}
+      onClose={() => setUbicacionesOpen(false)}
+      producto={{ producto }}
+      onActualizar={cargarDatos}
+    />
       {/* Snackbar */}
       <Snackbar
         open={snackbar.open}
@@ -338,6 +368,12 @@ const DetalleProductoView = () => {
         onClose={() => setSnackbar({ ...snackbar, open: false })}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
+        <GestionUbicaciones
+  open={ubicacionesOpen}
+  onClose={() => setUbicacionesOpen(false)}
+  producto={{ producto }}
+  onActualizar={cargarDatos}
+/>
         <Alert severity={snackbar.severity} onClose={() => setSnackbar({ ...snackbar, open: false })}>
           {snackbar.message}
         </Alert>

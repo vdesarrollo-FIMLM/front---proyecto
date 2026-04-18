@@ -65,9 +65,11 @@ const SalidaView = () => {
 
   const { user } = useAuth()
   const isSuperAdmin = user?.rol === 'super_admin'
-  // Estado principal
   const [productoSeleccionado, setProductoSeleccionado] = useState(null)
   const [productosKit, setProductosKit] = useState([])
+  const [ubicacionesDisponibles, setUbicacionesDisponibles] = useState([])
+  const [ubicacionSeleccionada, setUbicacionSeleccionada] = useState('')
+  const [stockEnUbicacion, setStockEnUbicacion] = useState(0)
   const [salidasPendientes, setSalidasPendientes] = useState([])
   const [ultimasSalidas, setUltimasSalidas] = useState([])
   const [loading, setLoading] = useState(false)
@@ -82,6 +84,10 @@ const SalidaView = () => {
   const [editandoSalida, setEditandoSalida] = useState(null)
   const [pdfLoading, setPdfLoading] = useState(false)
   const [pdfInfoMap, setPdfInfoMap] = useState({})
+  const [showUbicacionSelector, setShowUbicacionSelector] = useState(false)
+  const [productoParaSeleccion, setProductoParaSeleccion] = useState(null)
+
+  
   
   // Formulario
   const [formData, setFormData] = useState({
@@ -117,6 +123,40 @@ const SalidaView = () => {
     'Transferencia',
     'Otro'
   ]
+  
+const cargarUbicacionesProducto = async (productoId) => {
+  try {
+    const sessionId = getSessionId()
+    console.log(`🔵 Cargando ubicaciones para producto: ${productoId}`)
+    
+    const response = await fetch(`http://localhost:8000/api/productos/${productoId}/stock-por-ubicacion?session_id=${sessionId}`)
+    
+    if (!response.ok) {
+      console.error(`Error ${response.status}: ${response.statusText}`)
+      setUbicacionesDisponibles([])
+      return []
+    }
+    
+    const data = await response.json()
+    console.log(`📍 Ubicaciones encontradas:`, data)
+
+    let ubicacionesArray = []
+    if (Array.isArray(data)) {
+      ubicacionesArray = data
+    } else if (data && typeof data === 'object') {
+      ubicacionesArray = Object.values(data)
+    }
+    
+    // Filtrar solo ubicaciones con stock disponible
+    const ubicacionesConStock = data.filter(ub => ub.stock_disponible > 0)
+    setUbicacionesDisponibles(ubicacionesConStock)
+    
+    return ubicacionesConStock
+  } catch (error) {
+    console.error('Error cargando ubicaciones:', error)
+    return []
+  }
+}
 
   const isModoKit = formData.motivo === 'Entrega de Ayudas'                    
   const isModoAyudasUnidades = formData.motivo === 'Entrega de Ayudas/Unidades' 
@@ -239,40 +279,129 @@ const SalidaView = () => {
     }
   }
 
-  const handleSelectProduct = (producto) => {
-    // Modo kit O modo ayudas/unidades -> agregar a productosKit
-    if (isModoKit || isModoAyudasUnidades) {
-      const existente = productosKit.find(p => p.id === producto.id)
+  
+const handleSelectProduct = async (producto) => {
+  // Modo kit o ayudas/unidades -> agregar a lista
+  if (isModoKit || isModoAyudasUnidades) {
+    // Cargar ubicaciones disponibles para mostrar
+    const ubicaciones = await cargarUbicacionesProducto(producto.codigo)
+    
+    if (!ubicaciones || ubicaciones.length === 0) {
+      setSnackbar({ 
+        open: true, 
+        message: `⚠️ El producto ${producto.nombre} no tiene stock en ninguna ubicación.`, 
+        severity: 'warning' 
+      })
+      return
+    }
+    
+    // Si hay múltiples ubicaciones, mostrar selector
+    if (ubicaciones.length > 1) {
+      // Crear un dialog o prompt con las opciones
+      const opciones = ubicaciones.map((ub, idx) => 
+        `${idx + 1}. ${ub.ubicacion} (${ub.stock_disponible} disponibles)`
+      ).join('\n')
+      
+      const seleccion = prompt(
+        `Selecciona ubicación para ${producto.nombre}:\n\n${opciones}\n\nIngresa el número de la ubicación:`
+      )
+      
+      if (!seleccion) return
+      
+      const idxSeleccionado = parseInt(seleccion) - 1
+      if (isNaN(idxSeleccionado) || idxSeleccionado < 0 || idxSeleccionado >= ubicaciones.length) {
+        setSnackbar({ open: true, message: 'Selección no válida', severity: 'error' })
+        return
+      }
+      
+      const ubicacionSel = ubicaciones[idxSeleccionado]
+      setUbicacionSeleccionada(ubicacionSel.ubicacion)
+      setStockEnUbicacion(ubicacionSel.stock_disponible)
+      
+      // Agregar a la lista con la ubicación seleccionada
+      const existente = productosKit.find(p => p.id === producto.id && p.ubicacion === ubicacionSel.ubicacion)
       
       if (existente) {
         setProductosKit(prev =>
           prev.map(p =>
-            p.id === producto.id ? { ...p, cantidad_por_kit: p.cantidad_por_kit + 1 } : p
+            p.id === producto.id && p.ubicacion === ubicacionSel.ubicacion 
+              ? { ...p, cantidad_por_kit: p.cantidad_por_kit + 1 } 
+              : p
           )
         )
-        setSnackbar({ open: true, message: `${producto.nombre}: +1 unidad`, severity: 'success' })
+        setSnackbar({ open: true, message: `${producto.nombre}: +1 unidad en ${ubicacionSel.ubicacion}`, severity: 'success' })
       } else {
         setProductosKit(prev => [
           ...prev,
           {
             ...producto,
+            ubicacion: ubicacionSel.ubicacion,
+            stock_en_ubicacion: ubicacionSel.stock_disponible,
             cantidad_por_kit: 1
           }
         ])
-        setSnackbar({ open: true, message: `${producto.nombre} agregado`, severity: 'success' })
+        setSnackbar({ open: true, message: `${producto.nombre} agregado (${ubicacionSel.ubicacion})`, severity: 'success' })
       }
-      
-      setSearchTerm('')
-      setShowSearchResults(false)
     } else {
-      // Modo normal (un solo producto)
-      setProductoSeleccionado(producto)
-      setFormData(prev => ({ ...prev, cantidad: 1 }))
-      setSnackbar({ open: true, message: `Producto seleccionado: ${producto.nombre}`, severity: 'success' })
-      setSearchTerm('')
-      setShowSearchResults(false)
+      // Solo una ubicación, seleccionar automáticamente
+      const ubicacionUnica = ubicaciones[0]
+      setUbicacionSeleccionada(ubicacionUnica.ubicacion)
+      setStockEnUbicacion(ubicacionUnica.stock_disponible)
+      
+      const existente = productosKit.find(p => p.id === producto.id && p.ubicacion === ubicacionUnica.ubicacion)
+      
+      if (existente) {
+        setProductosKit(prev =>
+          prev.map(p =>
+            p.id === producto.id && p.ubicacion === ubicacionUnica.ubicacion 
+              ? { ...p, cantidad_por_kit: p.cantidad_por_kit + 1 } 
+              : p
+          )
+        )
+        setSnackbar({ open: true, message: `${producto.nombre}: +1 unidad en ${ubicacionUnica.ubicacion}`, severity: 'success' })
+      } else {
+        setProductosKit(prev => [
+          ...prev,
+          {
+            ...producto,
+            ubicacion: ubicacionUnica.ubicacion,
+            stock_en_ubicacion: ubicacionUnica.stock_disponible,
+            cantidad_por_kit: 1
+          }
+        ])
+        setSnackbar({ open: true, message: `${producto.nombre} agregado (${ubicacionUnica.ubicacion})`, severity: 'success' })
+      }
     }
+    
+    setSearchTerm('')
+    setShowSearchResults(false)
+  } else {
+    // Modo normal (un solo producto)
+    const ubicaciones = await cargarUbicacionesProducto(producto.codigo)
+    
+    if (!ubicaciones || ubicaciones.length === 0) {
+      setSnackbar({ 
+        open: true, 
+        message: `⚠️ El producto ${producto.nombre} no tiene stock en ninguna ubicación.`, 
+        severity: 'warning' 
+      })
+      return
+    }
+    
+    const ubicacionesArray = Array.isArray(ubicaciones) ? ubicaciones : []
+
+    // Guardar ubicaciones en estado para el selector
+    setUbicacionesDisponibles(ubicaciones)
+    
+    // Mostrar selector de ubicación en un Dialog
+    setProductoSeleccionado(producto)
+    setShowUbicacionSelector(true)  // Nuevo estado para mostrar modal
+    setFormData(prev => ({ ...prev, cantidad: 1 }))
+    
+    setSearchTerm('')
+    setShowSearchResults(false)
   }
+}
 
   const handleUpdateCantidadKit = (index, nuevaCantidad) => {
     if (nuevaCantidad === '') {
@@ -284,17 +413,18 @@ const SalidaView = () => {
     
     const cantidad = parseInt(nuevaCantidad, 10)
     if (!isNaN(cantidad) && cantidad > 0) {
-      // Validar stock en tiempo real
-      const producto = productosKit[index]
-      const cantidadTotal = isModoKit ? cantidad * formData.cantidadKits : cantidad
+    const producto = productosKit[index]
+    const cantidadKits = isModoKit ? (formData.cantidadKits || 1) : 1
+    const cantidadTotal = cantidad * cantidadKits
+    const stockEnUbicacion = producto.stock_en_ubicacion || 0
       
       if (cantidadTotal > producto.stock_actual) {
         setSnackbar({ 
-          open: true, 
-          message: `Stock insuficiente: necesita ${cantidadTotal}, disponible: ${producto.stock_actual}`, 
-          severity: 'error' 
-        })
-        return
+        open: true, 
+        message: `⚠️ Stock insuficiente en ${producto.ubicacion || 'la ubicación'}. Disponible: ${stockEnUbicacion}, Necesita: ${cantidadTotal}`, 
+        severity: 'error' 
+      })
+      return
       }
       
       setProductosKit(prev =>
@@ -360,15 +490,17 @@ const SalidaView = () => {
     
     productosKit.forEach(producto => {
       const totalNecesario = producto.cantidad_por_kit * cantidadKits
-      if (totalNecesario > producto.stock_actual) {
-        errores.push({
-          nombre: producto.nombre,
-          necesario: totalNecesario,
-          disponible: producto.stock_actual,
-          porKit: producto.cantidad_por_kit
-        })
-      }
-    })
+      const stockDisponibleEnUbicacion = producto.stock_en_ubicacion || 0
+      if (totalNecesario > stockDisponibleEnUbicacion) {
+      errores.push({
+        nombre: producto.nombre,
+        ubicacion: producto.ubicacion || 'Sin ubicación',
+        necesario: totalNecesario,
+        disponible: stockDisponibleEnUbicacion,
+        porKit: producto.cantidad_por_kit
+      })
+    }
+  })
     
     return { errores, valido: errores.length === 0 }
   }
@@ -378,30 +510,35 @@ const SalidaView = () => {
       const cantidadKits = isModoKit ? (formData.cantidadKits || 1) : 1
       return productosKit.some(producto => {
         const cantidadTotal = (producto.cantidad_por_kit || 0) * cantidadKits
-        return cantidadTotal > (producto.stock_actual || 0)
+        const stockDisponible = producto.stock_en_ubicacion || 0
+        return cantidadTotal > stockDisponible
       })
     }
     if (isModoNormal && productoSeleccionado) {
-      return (formData.cantidad || 0) > (productoSeleccionado.stock_actual || 0)
-    }
-    return false
+
+    const stockDisponible = productoSeleccionado.stock_en_ubicacion || 0
+    return (formData.cantidad || 0) > stockDisponible
   }
+  return false
+}
 
   const handleUpdateCantidadKits = (nuevaCantidad) => {
     const numValue = parseInt(nuevaCantidad, 10)
     if (!isNaN(numValue) && numValue > 0) {
       // Validar stock con la nueva cantidad de kits
       const erroresStock = []
-      productosKit.forEach(producto => {
-        const cantidadTotal = producto.cantidad_por_kit * numValue
-        if (cantidadTotal > producto.stock_actual) {
-          erroresStock.push({
-            nombre: producto.nombre,
-            cantidadTotal: cantidadTotal,
-            stockActual: producto.stock_actual
-          })
-        }
-      })
+    productosKit.forEach(producto => {
+      const cantidadTotal = producto.cantidad_por_kit * numValue
+      const stockEnUbicacion = producto.stock_en_ubicacion || 0
+      if (cantidadTotal > stockEnUbicacion) {
+        erroresStock.push({
+          nombre: producto.nombre,
+          ubicacion: producto.ubicacion,
+          cantidadTotal: cantidadTotal,
+          stockActual: stockEnUbicacion
+        })
+      }
+    })
       
       if (erroresStock.length > 0) {
         let mensaje = '⚠️ Stock insuficiente para la cantidad de kits seleccionada:\n'
@@ -435,14 +572,14 @@ const SalidaView = () => {
       }
       
       const stockCheck = verificarStockKit()
-      if (!stockCheck.valido) {
-        let mensaje = 'Stock insuficiente:\n\n'
-        stockCheck.errores.forEach(e => {
-          mensaje += `• ${e.nombre}: Necesario ${e.porKit} × ${formData.cantidadKits} kits = ${e.necesario} unidades, Disponible: ${e.disponible}\n`
-        })
-        alert(mensaje)
-        return
-      }
+if (!stockCheck.valido) {
+  let mensaje = 'Stock insuficiente en la(s) ubicación(es) seleccionada(s):\n\n'
+  stockCheck.errores.forEach(e => {
+    mensaje += `• ${e.nombre} (${e.ubicacion}): Necesario ${e.porKit} × ${formData.cantidadKits} kits = ${e.necesario} unidades, Disponible: ${e.disponible}\n`
+  })
+  alert(mensaje)
+  return
+}
       
       const kit = {
         id: Date.now(),
@@ -458,6 +595,7 @@ const SalidaView = () => {
           producto_id: p.codigo,
           producto_nombre: p.nombre,
           producto_codigo: p.codigo,
+          ubicacion: p.ubicacion,
           cantidad_por_kit: p.cantidad_por_kit,
           cantidad_total: p.cantidad_por_kit * formData.cantidadKits,
           stock_disponible: p.stock_actual,
@@ -472,6 +610,7 @@ const SalidaView = () => {
         producto_id: p.producto_id,
         producto_nombre: p.producto_nombre,
         producto_codigo: p.producto_codigo,
+        ubicacion: p.ubicacion,
         cantidad: p.cantidad_total,
         stock_actual: p.stock_actual,
         stock_minimo: p.stock_minimo || 5,
@@ -543,6 +682,7 @@ const SalidaView = () => {
           producto_id: p.codigo,
           producto_nombre: p.nombre,
           producto_codigo: p.codigo,
+          ubicacion: p.ubicacion,
           cantidad: p.cantidad_por_kit,
           stock_disponible: p.stock_actual
         }))
@@ -554,6 +694,7 @@ const SalidaView = () => {
         producto_id: p.producto_id,
         producto_nombre: p.producto_nombre,
         producto_codigo: p.producto_codigo,
+        ubicacion: p.ubicacion,
         cantidad: p.cantidad,
         stock_actual: p.stock_disponible,
         tipo: 'multiple'
@@ -594,33 +735,34 @@ const SalidaView = () => {
       }
       
       const salida = {
-        id: Date.now(),
-        tipo: 'normal',
-        producto: productoSeleccionado,
-        producto_id: productoSeleccionado.codigo,
-        cantidad: formData.cantidad,
-        motivo: formData.motivo,
-        cliente: formData.cliente,
-        notas: formData.notas,
-        fecha: formData.fecha,
-        stock_restante: productoSeleccionado.stock_actual - formData.cantidad,
-        producto_nombre: productoSeleccionado.nombre,
-        producto_codigo: productoSeleccionado.codigo,
-        stock_actual: productoSeleccionado.stock_actual,
-        stock_minimo: productoSeleccionado.stock_minimo
-      }
-      
-      setSalidasPendientes(prev => [...prev, salida])
-      
-      const itemsParaReserva = [{
-        producto_id: salida.producto_id,
-        producto_nombre: salida.producto_nombre,
-        producto_codigo: salida.producto_codigo,
-        cantidad: salida.cantidad,
-        stock_actual: salida.stock_actual,
-        stock_minimo: salida.stock_minimo,
-        tipo: 'normal'
-      }]
+  id: Date.now(),
+  tipo: 'normal',
+  producto: productoSeleccionado,
+  producto_id: productoSeleccionado.codigo,
+  ubicacion: productoSeleccionado.ubicacion,  // Incluir ubicación
+  cantidad: formData.cantidad,
+  motivo: formData.motivo,
+  cliente: formData.cliente,
+  notas: formData.notas,
+  fecha: formData.fecha,
+  stock_restante: productoSeleccionado.stock_en_ubicacion - formData.cantidad,
+  producto_nombre: productoSeleccionado.nombre,
+  producto_codigo: productoSeleccionado.codigo,
+  stock_actual: productoSeleccionado.stock_actual,
+  stock_minimo: productoSeleccionado.stock_minimo
+}
+
+// Los itemsParaReserva también deben incluir ubicación
+const itemsParaReserva = [{
+  producto_id: salida.producto_id,
+  producto_nombre: salida.producto_nombre,
+  producto_codigo: salida.producto_codigo,
+  ubicacion: salida.ubicacion,  // Incluir ubicación
+  cantidad: salida.cantidad,
+  stock_actual: salida.stock_actual,
+  stock_minimo: salida.stock_minimo,
+  tipo: 'normal'
+}]
       
       try {
         await reservasService.guardarReserva(itemsParaReserva, {
@@ -1236,9 +1378,12 @@ const SalidaView = () => {
                 <Typography variant="caption" color="text.secondary" display="block">
                   Código: {productoSeleccionado.codigo}
                 </Typography>
-                <Typography variant="caption" color={productoSeleccionado.stock_actual <= (productoSeleccionado.stock_minimo || 5) ? 'error' : 'text.secondary'}>
-                  Stock disponible: {productoSeleccionado.stock_actual}
-                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block">
+      📍 Ubicación seleccionada: {productoSeleccionado.ubicacion || 'Sin asignar'}
+    </Typography>
+                <Typography variant="caption" color={productoSeleccionado.stock_en_ubicacion <= (productoSeleccionado.stock_minimo || 5) ? 'error' : 'text.secondary'}>
+      Stock disponible en ubicación: {productoSeleccionado.stock_en_ubicacion || 0}
+    </Typography>
                 {stockCheck.advertencia && (
                   <Alert severity="warning" sx={{ mt: 1 }}>{stockCheck.advertencia}</Alert>
                 )}
@@ -1259,50 +1404,74 @@ const SalidaView = () => {
                   </Button>
                 </Box>
                 
-                {productosKit.map((producto, index) => (
+                {productosKit.map((producto, index) => {
+      const cantidadTotal = isModoKit 
+        ? (producto.cantidad_por_kit || 0) * (formData.cantidadKits || 1)
+        : (producto.cantidad_por_kit || 0)
+      const stockEnUbicacion = producto.stock_en_ubicacion || 0
+      const tieneStockSuficiente = cantidadTotal <= stockEnUbicacion
+      
+      return (
                   <Box key={index} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1, p: 1, bgcolor: 'white', borderRadius: 1 }}>
-                    <Box sx={{ flex: 1 }}>
-                      <Typography variant="body2" fontWeight="medium">{producto.nombre}</Typography>
-                      <Typography variant="caption" color="text.secondary">{producto.codigo}</Typography>
-                      <Typography 
-                        variant="caption" 
-                        color={producto.stock_actual <= (producto.stock_minimo || 5) ? 'error' : 'text.secondary'}
-                        sx={{ display: 'block', fontWeight: producto.stock_actual <= (producto.stock_minimo || 5) ? 'bold' : 'normal' }}
-                      >
-                        Stock disponible: {producto.stock_actual}
-                      </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <TextField
-                        type="text"
-                        size="small"
-                        value={producto.cantidad_por_kit}
-                        onChange={(e) => handleUpdateCantidadKit(index, e.target.value)}
-                        onBlur={() => {
-                          if (!producto.cantidad_por_kit || producto.cantidad_por_kit === 0 || producto.cantidad_por_kit === '') {
-                            setProductosKit(prev =>
-                              prev.map((p, i) => i === index ? { ...p, cantidad_por_kit: 1 } : p)
-                            )
-                          }
-                        }}
-                        sx={{ width: 80 }}
-                        InputProps={{
-                          inputProps: { 
-                            inputMode: 'numeric',
-                            pattern: '[0-9]*',
-                            style: { textAlign: 'center' }
-                          }
-                        }}
-                      />
-                      <Typography variant="body2">{isModoKit ? 'unid/kit' : 'unidades'}</Typography>
-                      <IconButton size="small" color="error" onClick={() => handleRemoveProductoKit(index)}>
-                        <DeleteIcon />
-                      </IconButton>
-                    </Box>
-                  </Box>
-                ))}
-              </Box>
-            )}
+          <Box sx={{ flex: 1 }}>
+            <Typography variant="body2" fontWeight="medium">{producto.nombre}</Typography>
+            <Typography variant="caption" color="text.secondary">{producto.codigo}</Typography>
+            <Typography variant="caption" color="primary" display="block">
+              📍 Ubicación: {producto.ubicacion || 'No seleccionada'}
+            </Typography>
+            <Typography 
+              variant="caption" 
+              color={!tieneStockSuficiente ? 'error' : (stockEnUbicacion <= (producto.stock_minimo || 5) ? 'warning' : 'text.secondary')}
+              sx={{ display: 'block', fontWeight: !tieneStockSuficiente ? 'bold' : 'normal' }}
+            >
+              Stock en ubicación: {stockEnUbicacion} unidades
+              {!tieneStockSuficiente && (
+                <span style={{ color: 'red', marginLeft: 8 }}>
+                  ⚠️ Insuficiente: necesita {cantidadTotal}
+                </span>
+              )}
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <TextField
+              type="text"
+              size="small"
+              value={producto.cantidad_por_kit}
+              onChange={(e) => {
+                const value = e.target.value
+                if (value === '') {
+                  handleUpdateCantidadKit(index, '')
+                } else if (/^\d+$/.test(value)) {
+                  const numValue = parseInt(value, 10)
+                  if (numValue > 0) {
+                    handleUpdateCantidadKit(index, numValue)
+                  }
+                }
+              }}
+              onBlur={() => {
+                if (!producto.cantidad_por_kit || producto.cantidad_por_kit === 0 || producto.cantidad_por_kit === '') {
+                  handleUpdateCantidadKit(index, 1)
+                }
+              }}
+              sx={{ width: 80 }}
+              InputProps={{
+                inputProps: { 
+                  inputMode: 'numeric',
+                  pattern: '[0-9]*',
+                  style: { textAlign: 'center' }
+                }
+              }}
+            />
+            <Typography variant="body2">{isModoKit ? 'unid/kit' : 'unidades'}</Typography>
+            <IconButton size="small" color="error" onClick={() => handleRemoveProductoKit(index)}>
+              <DeleteIcon />
+            </IconButton>
+          </Box>
+        </Box>
+      )
+    })}
+  </Box>
+)}
             
             <Divider sx={{ my: 3 }} />
             
@@ -1481,8 +1650,11 @@ const SalidaView = () => {
                               <KitIcon /> {item.nombre}
                             </Typography>
                             <Typography variant="caption" color="text.secondary" display="block">
-                              {item.motivo} • Beneficiario: {item.cliente || 'No especificado'}
-                            </Typography>
+      📍 Ubicaciones: {item.productos.map(p => `${p.ubicacion || 'Sin ubicación'} (${p.cantidad_total})`).join(', ')}
+    </Typography>
+    <Typography variant="caption" color="text.secondary" display="block">
+      {item.motivo} • Beneficiario: {item.cliente || 'No especificado'}
+    </Typography>
                             <Typography variant="caption" color="text.secondary" display="block">
                               {item.cantidad_kits} kits × {item.productos.length} productos ({item.productos.reduce((sum, p) => sum + p.cantidad_total, 0)} unidades totales)
                             </Typography>
@@ -1492,6 +1664,9 @@ const SalidaView = () => {
                             <Typography variant="subtitle2" fontWeight="bold" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                               <BoxIcon /> {item.nombre}
                             </Typography>
+                            <Typography variant="caption" color="text.secondary" display="block">
+      📍 Ubicaciones: {item.productos.map(p => `${p.ubicacion || 'Sin ubicación'} (${p.cantidad})`).join(', ')}
+    </Typography>
                             <Typography variant="caption" color="text.secondary" display="block">
                               {item.motivo} • Beneficiario: {item.cliente || 'No especificado'}
                             </Typography>
@@ -1508,8 +1683,8 @@ const SalidaView = () => {
                               {item.producto_nombre}
                             </Typography>
                             <Typography variant="caption" color="text.secondary" display="block">
-                              {item.motivo} • {item.cliente ? `Destino: ${item.cliente}` : ''}
-                            </Typography>
+      📍 Ubicación: {item.ubicacion || 'Sin asignar'} • {item.motivo} • {item.cliente ? `Destino: ${item.cliente}` : ''}
+    </Typography>
                             <Typography variant="caption" color={item.stock_restante <= (item.stock_minimo || 5) ? 'error' : 'text.secondary'}>
                               Stock restante disponible: {item.stock_restante} unidades
                               {item.stock_fisico && item.stock_fisico !== item.stock_actual && (
@@ -1743,7 +1918,70 @@ const SalidaView = () => {
           <Button onClick={() => setDetalleModalOpen(false)}>Cerrar</Button>
         </DialogActions>
       </Dialog>
-      
+      {/* Modal de selección de ubicación */}
+<Dialog open={showUbicacionSelector} onClose={() => setShowUbicacionSelector(false)} maxWidth="sm" fullWidth>
+  <DialogTitle>
+    Seleccionar ubicación para {productoParaSeleccion?.nombre}
+  </DialogTitle>
+  <DialogContent>
+    <Box sx={{ mt: 2 }}>
+      <Typography variant="body2" color="text.secondary" gutterBottom>
+        Stock disponible por ubicación:
+      </Typography>
+      {(!ubicacionesDisponibles || ubicacionesDisponibles.length === 0) ? (
+        <Alert severity="info" sx={{ mt: 2 }}>
+          No hay ubicaciones disponibles con stock para este producto.
+          <Button 
+            size="small" 
+            sx={{ ml: 2 }}
+            onClick={() => {
+              setShowUbicacionSelector(false)
+              router.push(`/inventario/productos/${productoParaSeleccion?.id}`)
+            }}
+          >
+            Gestionar Ubicaciones
+          </Button>
+        </Alert>
+      ) : (
+        <List>
+          {ubicacionesDisponibles.map((ub) => (
+            <ListItem 
+              key={ub.ubicacion}
+              button
+              onClick={() => {
+                setProductoSeleccionado({
+                  ...productoParaSeleccion,
+                  ubicacion: ub.ubicacion,
+                  stock_en_ubicacion: ub.stock_disponible
+                })
+                setFormData(prev => ({ ...prev, cantidad: 1 }))
+                setShowUbicacionSelector(false)
+                setSnackbar({ 
+                  open: true, 
+                  message: `Producto seleccionado: ${productoParaSeleccion?.nombre} (${ub.ubicacion})`, 
+                  severity: 'success' 
+                })
+              }}
+            >
+              <ListItemText 
+                primary={`📍 ${ub.ubicacion}`}
+                secondary={`Stock disponible: ${ub.stock_disponible} unidades`}
+              />
+              <Chip 
+                label={`${ub.stock_disponible} unid.`} 
+                size="small" 
+                color={ub.stock_disponible <= 5 ? 'error' : 'success'}
+              />
+            </ListItem>
+          ))}
+        </List>
+      )}
+    </Box>
+  </DialogContent>
+  <DialogActions>
+    <Button onClick={() => setShowUbicacionSelector(false)}>Cancelar</Button>
+  </DialogActions>
+</Dialog>
       {/* Modal de Edición de Salida */}
       <Dialog open={editModalOpen} onClose={() => setEditModalOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>

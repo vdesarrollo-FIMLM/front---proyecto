@@ -1,3 +1,4 @@
+// src/views/apps/inventario/ProductosView.js
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import { useAuth } from 'src/hooks/useAuth'
@@ -28,7 +29,12 @@ import {
   CircularProgress,
   Card,
   CardContent,
-  Grid
+  Grid,
+  Collapse,
+  List,
+  ListItem,
+  ListItemText,
+  Divider
 } from '@mui/material'
 import {
   Add as AddIcon,
@@ -39,15 +45,19 @@ import {
   Visibility as VisibilityIcon,
   Refresh as RefreshIcon,
   Download as DownloadIcon,
-  FileCopy
+  FileCopy,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
+  LocationOn as LocationIcon,
+  Warning as WarningIcon
 } from '@mui/icons-material'
 import { productosService } from 'src/services/inventario/productos.service'
+import { reservasService } from 'src/services/inventario/reservas.service'
 
 const ProductosView = () => {
   const { user, hasPermission } = useAuth()
   const isSuperAdmin = user?.rol === 'super_admin'
 
- // ✅ define las variables de permisos 
   const canEdit = hasPermission('edit_product')
   const canDelete = hasPermission('delete_product')
   const canCreate = hasPermission('create_product')
@@ -63,6 +73,9 @@ const ProductosView = () => {
   const [qrDialogOpen, setQrDialogOpen] = useState(false)
   const [qrImage, setQrImage] = useState('')
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' })
+  const [expandedRow, setExpandedRow] = useState(null)
+  const [ubicacionesPorProducto, setUbicacionesPorProducto] = useState({})
+  const [loadingUbicaciones, setLoadingUbicaciones] = useState({})
   
   const router = useRouter()
 
@@ -74,10 +87,15 @@ const ProductosView = () => {
     filtrarProductos()
   }, [searchTerm, productos])
 
- const cargarProductos = async () => {
+  const cargarProductos = async () => {
   setLoading(true)
   try {
     const data = await productosService.getAll()
+    console.log('🟢 Productos recibidos en ProductosView:', data.map(p => ({
+      nombre: p.nombre,
+      stock_actual: p.stock_actual,
+      stock_fisico: p.stock_fisico
+    })))
     setProductos(data)
     setFilteredProductos(data)
   } catch (error) {
@@ -86,6 +104,35 @@ const ProductosView = () => {
     setLoading(false)
   }
 }
+
+  const cargarUbicacionesProducto = async (productoId) => {
+    if (ubicacionesPorProducto[productoId]) return // Ya cargado
+    
+     setLoadingUbicaciones(prev => ({ ...prev, [productoId]: true }))
+  try {
+    const data = await productosService.getProductoConUbicaciones(productoId)
+    // ✅ Agregar validación para evitar error cuando data es null
+    if (data && data.stock_por_ubicacion) {
+      setUbicacionesPorProducto(prev => ({ ...prev, [productoId]: data.stock_por_ubicacion }))
+    } else {
+      setUbicacionesPorProducto(prev => ({ ...prev, [productoId]: [] }))
+    }
+  } catch (error) {
+    console.error('Error cargando ubicaciones:', error)
+    setUbicacionesPorProducto(prev => ({ ...prev, [productoId]: [] }))
+  } finally {
+    setLoadingUbicaciones(prev => ({ ...prev, [productoId]: false }))
+  }
+}
+
+  const handleExpandRow = async (productoId) => {
+    if (expandedRow === productoId) {
+      setExpandedRow(null)
+    } else {
+      setExpandedRow(productoId)
+      await cargarUbicacionesProducto(productoId)
+    }
+  }
 
   const filtrarProductos = () => {
     if (!searchTerm.trim()) {
@@ -147,10 +194,15 @@ const ProductosView = () => {
     return 'success'
   }
 
-  const getStockLabel = (stock, stockMinimo) => {
-    if (stock <= (stockMinimo || 5)) return 'Bajo Stock'
-    if (stock <= (stockMinimo || 5) * 2) return 'Stock Medio'
-    return 'Stock Alto'
+  // Calcular total de reservas (de otros usuarios + actual)
+  const getTotalReservas = (producto) => {
+    return (producto.stock_reservado_otros || 0) + (producto.stock_reservado_actual || 0)
+  }
+
+  // Verificar si el producto tiene ubicaciones
+  const tieneUbicaciones = (producto) => {
+    const ubicaciones = ubicacionesPorProducto[producto.id || producto.codigo]
+    return ubicaciones && ubicaciones.length > 0
   }
 
   if (loading) {
@@ -175,24 +227,24 @@ const ProductosView = () => {
             startIcon={<RefreshIcon />}
             onClick={cargarProductos}
           >
-          Actualizar
-  </Button>
-  <Button
-    variant="outlined"
-    startIcon={<FileCopy />}
-    onClick={() => router.push('/inventario/cargar-excel')}
-  >
-    Carga Masiva
-  </Button>
-  {canCreate && (
-  <Button
-    variant="contained"
-    startIcon={<AddIcon />}
-    onClick={() => router.push('/inventario/productos/crear')}
-  >
-    Nuevo Producto
-  </Button>
-  )}
+            Actualizar
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<FileCopy />}
+            onClick={() => router.push('/inventario/cargar-excel')}
+          >
+            Carga Masiva
+          </Button>
+          {canCreate && (
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => router.push('/inventario/productos/crear')}
+            >
+              Nuevo Producto
+            </Button>
+          )}
         </Box>
       </Box>
 
@@ -253,10 +305,10 @@ const ProductosView = () => {
           <Card>
             <CardContent>
               <Typography color="text.secondary" gutterBottom>
-                Valor Total
+                Sin Ubicación
               </Typography>
-              <Typography variant="h4">
-                ${productos.reduce((sum, p) => sum + ((p.precio_unitario || 0) * (p.stock_actual || 0)), 0).toLocaleString()}
+              <Typography variant="h4" color="warning.main">
+                {productos.filter(p => !p.ubicaciones || p.ubicaciones.length === 0).length}
               </Typography>
             </CardContent>
           </Card>
@@ -268,122 +320,230 @@ const ProductosView = () => {
         <Table>
           <TableHead>
             <TableRow sx={{ bgcolor: 'grey.50' }}>
+              <TableCell width="5%" />
               <TableCell>Código</TableCell>
               <TableCell>Nombre</TableCell>
               <TableCell>Categoría</TableCell>
-              <TableCell align="right">Precio</TableCell>
-              <TableCell align="center">Stock</TableCell>
+              <TableCell align="center">Stock / Reservas</TableCell>
+              <TableCell align="center">Ubicación</TableCell>
+              <TableCell align="center">Estado</TableCell>
               <TableCell align="center">Acciones</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {filteredProductos
               .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-              .map((producto) => (
-                <TableRow key={producto.id} hover>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-    {producto.codigo}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography fontWeight="medium">
-                      {producto.nombre}
-                    </Typography>
-                    {producto.descripcion && (
-                      <Typography variant="caption" color="text.secondary">
-                        {producto.descripcion.substring(0, 50)}...
-                      </Typography>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Chip label={producto.categoria || 'Sin categoría'} size="small" />
-                  </TableCell>
-                  <TableCell align="right">
-                    ${(producto.precio_unitario || 0).toFixed(2)}
-                  </TableCell>
-                  <TableCell align="center">
-                     <Box>
-    {/* Stock DISPONIBLE (físico - reservas) */}
-    <Chip
-      label={`Stock: ${producto.stock_actual || 0}`}
-      color={getStockColor(producto.stock_actual, producto.stock_minimo)}
-      size="small"
-      sx={{ mb: 0.5, fontWeight: 'bold' }}
-    />
-    
-    {/* Mostrar stock físico si es diferente */}
-    {producto.stock_fisico !== undefined && producto.stock_fisico !== producto.stock_actual && (
-      <Typography variant="caption" display="block" color="text.secondary" fontSize="10px">
-        Físico: {producto.stock_fisico}
-      </Typography>
-    )}
-    
-    {/* Reservas del usuario actual */}
-    {producto.stock_reservado_actual > 0 && (
-      <Chip
-        label={`🔒 Reservados: ${producto.stock_reservado_actual}`}
-        color="warning"
-        size="small"
-        variant="outlined"
-        sx={{ mt: 0.5 }}
-      />
-    )}
-    
-    {/* Reservas de otros usuarios */}
-    {producto.stock_reservado_otros > 0 && (
-      <Typography variant="caption" display="block" color="text.secondary" fontSize="10px">
-        ({producto.stock_reservado_otros} reservados por otros)
-      </Typography>
-    )}
-  </Box>
-                  </TableCell>
-                  <TableCell align="center">
-                    <Tooltip title="Ver Detalle">
-                      <IconButton
-                        size="small"
-                        onClick={() => router.push(`/inventario/productos/${producto.id}`)}
-                      >
-                        <VisibilityIcon />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Generar QR">
-                      <IconButton
-                        size="small"
-                        color="primary"
-                        onClick={() => handleGenerarQR(producto)}
-                      >
-                        <QrCodeIcon />
-                      </IconButton>
-                    </Tooltip>
-                    {canEdit && (
-                    <Tooltip title="Editar">
-                      <IconButton
-                        size="small"
-                        color="warning"
-                        onClick={() => router.push(`/inventario/productos/editar/${producto.id}`)}>
-                        <EditIcon />
-                      </IconButton>
-                    </Tooltip>
-                    )}
-                    {canDelete && (
-                    <Tooltip title="Eliminar">
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={() => handleDeleteClick(producto)}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </Tooltip>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
+              .map((producto) => {
+                const totalReservas = getTotalReservas(producto)
+                const tieneSinUbicacion = !tieneUbicaciones(producto)
+                const ubicaciones = ubicacionesPorProducto[producto.id || producto.codigo] || []
+                
+                return (
+                  <>
+                    <TableRow key={producto.id} hover>
+                      {/* Expandir fila */}
+                      <TableCell>
+                        <IconButton size="small" onClick={() => handleExpandRow(producto.id || producto.codigo)}>
+                          {expandedRow === (producto.id || producto.codigo) ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                        </IconButton>
+                      </TableCell>
+                      
+                      <TableCell>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                          {producto.codigo}
+                        </Typography>
+                      </TableCell>
+                      
+                      <TableCell>
+                        <Typography fontWeight="medium">
+                          {producto.nombre}
+                        </Typography>
+                        {producto.descripcion && (
+                          <Typography variant="caption" color="text.secondary">
+                            {producto.descripcion.substring(0, 50)}...
+                          </Typography>
+                        )}
+                      </TableCell>
+                      
+                      <TableCell>
+                        <Chip label={producto.categoria || 'Sin categoría'} size="small" />
+                      </TableCell>
+                      
+                      {/* Stock / Reservas */}
+                      <TableCell align="center">
+                        <Box>
+                          <Chip
+                            label={`Stock: ${producto.stock_actual || 0}`}
+                            color={getStockColor(producto.stock_actual, producto.stock_minimo)}
+                            size="small"
+                            sx={{ mb: 0.5, fontWeight: 'bold' }}
+                          />
+                          {totalReservas > 0 && (
+                            <Chip
+                              label={`🔒 Reservados: ${totalReservas}`}
+                              color="warning"
+                              size="small"
+                              variant="outlined"
+                              sx={{ ml: 0.5 }}
+                            />
+                          )}
+                          {producto.stock_fisico !== undefined && producto.stock_fisico !== producto.stock_actual && (
+                            <Typography variant="caption" display="block" color="text.secondary" fontSize="10px">
+                              Físico: {producto.stock_fisico}
+                            </Typography>
+                          )}
+                        </Box>
+                      </TableCell>
+                      
+                      {/* Ubicación */}
+                      <TableCell align="center">
+                        {tieneSinUbicacion ? (
+                          <Chip
+                            label="Sin ubicación"
+                            color="warning"
+                            size="small"
+                            icon={<WarningIcon />}
+                          />
+                        ) : (
+                          <Chip
+                            label={`${ubicaciones.length} ubicación(es)`}
+                            color="info"
+                            size="small"
+                            icon={<LocationIcon />}
+                          />
+                        )}
+                      </TableCell>
+                      
+                      {/* Estado */}
+                      <TableCell align="center">
+                        {producto.stock_actual <= (producto.stock_minimo || 5) ? (
+                          <Chip label="Stock Bajo" color="error" size="small" />
+                        ) : (
+                          <Chip label="Normal" color="success" size="small" />
+                        )}
+                      </TableCell>
+                      
+                      {/* Acciones */}
+                      <TableCell align="center">
+                        <Tooltip title="Ver Detalle">
+                          <IconButton
+                            size="small"
+                            onClick={() => router.push(`/inventario/productos/${producto.id}`)}
+                          >
+                            <VisibilityIcon />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Generar QR">
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            onClick={() => handleGenerarQR(producto)}
+                          >
+                            <QrCodeIcon />
+                          </IconButton>
+                        </Tooltip>
+                        {canEdit && (
+                          <Tooltip title="Editar">
+                            <IconButton
+                              size="small"
+                              color="warning"
+                              onClick={() => router.push(`/inventario/productos/editar/${producto.id}`)}
+                            >
+                              <EditIcon />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        {canDelete && (
+                          <Tooltip title="Eliminar">
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() => handleDeleteClick(producto)}
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                    
+                    {/* Fila expandida con ubicaciones */}
+                    <TableRow>
+                      <TableCell colSpan={8} sx={{ py: 0, bgcolor: '#fafafa' }}>
+                        <Collapse in={expandedRow === (producto.id || producto.codigo)} timeout="auto" unmountOnExit>
+                          <Box sx={{ p: 2 }}>
+                            <Typography variant="subtitle2" gutterBottom>
+                              📍 Stock por Ubicación
+                            </Typography>
+                            {loadingUbicaciones[producto.id || producto.codigo] ? (
+                              <CircularProgress size={24} />
+                            ) : ubicaciones.length === 0 ? (
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                <Alert severity="warning" sx={{ flex: 1 }}>
+                                  Este producto no tiene ubicaciones asignadas.
+                                  <Button 
+                                    size="small" 
+                                    sx={{ ml: 2 }}
+                                    onClick={() => router.push(`/inventario/productos/${producto.id}`)}
+                                  >
+                                    Gestionar Ubicaciones
+                                  </Button>
+                                </Alert>
+                              </Box>
+                            ) : (
+                              <Grid container spacing={1}>
+                                {ubicaciones.map((ub) => (
+                                  <Grid item xs={12} sm={6} md={4} key={ub.ubicacion || ub.id}>
+                                    <Paper variant="outlined" sx={{ p: 1.5 }}>
+                                      <Typography variant="subtitle2" fontWeight="bold">
+                                        {ub.ubicacion}
+                                      </Typography>
+                                      <Box sx={{ display: 'flex', gap: 2, mt: 0.5 }}>
+                                        <Chip 
+                                          label={`Stock: ${ub.stock_fisico || 0}`} 
+                                          size="small" 
+                                          color="primary"
+                                          variant="outlined"
+                                        />
+                                        {ub.stock_reservado > 0 && (
+                                          <Chip 
+                                            label={`Reservado: ${ub.stock_reservado}`} 
+                                            size="small" 
+                                            color="warning"
+                                            variant="outlined"
+                                          />
+                                        )}
+                                        <Chip 
+                                          label={`Disponible: ${ub.stock_disponible || 0}`} 
+                                          size="small" 
+                                          color={ub.stock_disponible <= (producto.stock_minimo || 5) ? 'error' : 'success'}
+                                        />
+                                      </Box>
+                                    </Paper>
+                                  </Grid>
+                                ))}
+                              </Grid>
+                            )}
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<LocationIcon />}
+                              onClick={() => router.push(`/inventario/productos/${producto.id}`)}
+                              sx={{ mt: 2 }}
+                            >
+                              Gestionar Ubicaciones
+                            </Button>
+                          </Box>
+                        </Collapse>
+                      </TableCell>
+                    </TableRow>
+                  </>
+                )
+              })}
             
             {filteredProductos.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
                   <Typography color="text.secondary">
                     No se encontraron productos
                   </Typography>

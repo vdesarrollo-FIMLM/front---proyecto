@@ -3,12 +3,12 @@
 // Definir los items con roles
 const getNavigation = (userRole) => {
   const allNavigation = [
-    {
-      title: 'Dashboard',
-      path: '/inventario/dashboard',
-      icon: 'mdi:view-dashboard',
-      roles: ['super_admin', 'admin']
-    },
+   // {
+     // title: 'Dashboard',
+      //path: '/inventario/dashboard',
+      //icon: 'mdi:view-dashboard',
+      //roles: ['super_admin', 'admin']
+    //},
     {
       title: 'Movimientos',
       path: '/inventario/movimientos',

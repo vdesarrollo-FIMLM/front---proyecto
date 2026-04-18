@@ -5,7 +5,7 @@ const InventarioIndex = () => {
   const router = useRouter()
   
   useEffect(() => {
-    router.replace('/inventario/dashboard')
+    router.replace('/inventario/movimientos')
   }, [router])
   
   return null

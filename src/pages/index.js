@@ -14,14 +14,13 @@ const modeMaintenance = process.env.NEXT_PUBLIC_MODE_MAINTENANCE
 
 export const getHomeRoute = role => {
   // 🔥 MODIFICADO: Redirigir al dashboard de inventario
-  if (role === 'client') return '/inventario/dashboard'
+  if (role === 'client') return '/inventario/movimientos'
   else if (modeMaintenance == 'true') return '/maintenance'
-  else return '/inventario/dashboard'
+  else return '/inventario/movimientos'
 }
 
 const Home = () => {
   // ** Hooks
-  const auth = useAuth()
   const router = useRouter()
 
   useEffect(() => {
@@ -29,23 +28,13 @@ const Home = () => {
       return
     }
 
-    // 🔥 MODIFICADO: Redirigir al dashboard de inventario
-    // Si hay usuario autenticado o no, siempre ir a inventario
-    const homeRoute = '/inventario/dashboard'
+    // CAMBIAR: de '/inventario/dashboard' a '/inventario/movimientos'
+    const homeRoute = '/inventario/movimientos'
     
     console.log('🔵 Redirigiendo a:', homeRoute)
     router.replace(homeRoute)
     
-    /* CÓDIGO ORIGINAL COMENTADO
-    if (auth.user && auth.user.role) {
-      const homeRoute = getHomeRoute(auth.user.role)
-
-      // Redirect user to Home URL
-      router.replace(homeRoute)
-    }
-    */
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [router])
 
   return <Spinner />
 }

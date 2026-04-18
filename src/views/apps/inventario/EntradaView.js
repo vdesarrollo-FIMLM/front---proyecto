@@ -112,29 +112,37 @@ const EntradaView = () => {
   console.log('  - ObjectId:', producto.id)  // Esto es el _id de MongoDB
   
  
-  const codigoProducto = producto.codigo 
+  const codigoProducto = producto.codigo
   
-  const existente = productosSeleccionados.find(p => p.producto_id === codigoProducto)
+  // ✅ Ubicación OPCIONAL - puede ser vacío
+  const ubicacion = formData.ubicacion || null
+  
+  const existente = productosSeleccionados.find(p => p.producto_id === codigoProducto && p.ubicacion === ubicacion)
   
   if (existente) {
     setProductosSeleccionados(prev =>
       prev.map(p =>
-        p.producto_id === codigoProducto ? { ...p, cantidad: p.cantidad + 1 } : p
+        p.producto_id === codigoProducto && p.ubicacion === ubicacion 
+          ? { ...p, cantidad: p.cantidad + 1 } 
+          : p
       )
     )
-    setSnackbar({ open: true, message: `${producto.nombre}: +1 unidad`, severity: 'success' })
+    const msgUbicacion = ubicacion ? ` en ${ubicacion}` : ''
+    setSnackbar({ open: true, message: `${producto.nombre}: +1 unidad${msgUbicacion}`, severity: 'success' })
   } else {
     setProductosSeleccionados(prev => [
       ...prev,
       {
-        producto_id: codigoProducto, 
+        producto_id: codigoProducto,
         producto_nombre: producto.nombre,
         producto_codigo: producto.codigo,
+        ubicacion: ubicacion,
         cantidad: 1,
         stock_actual: producto.stock_actual
       }
     ])
-    setSnackbar({ open: true, message: `${producto.nombre} agregado a la lista`, severity: 'success' })
+    const msgUbicacion = ubicacion ? ` (${ubicacion})` : ''
+    setSnackbar({ open: true, message: `${producto.nombre} agregado a la lista${msgUbicacion}`, severity: 'success' })
   }
   
   setSearchTerm('')
@@ -204,17 +212,17 @@ const EntradaView = () => {
     id: Date.now(),
     tipo: productosSeleccionados.length === 1 ? 'individual' : 'multiple',
     productos: productosSeleccionados.map(p => ({
-      producto_id: p.producto_id,  // Esto ya debería ser el código
+      producto_id: p.producto_id,
       producto_nombre: p.producto_nombre,
       producto_codigo: p.producto_codigo,
+      ubicacion: p.ubicacion || null,  // Puede ser null
       cantidad: p.cantidad,
       stock_actual: p.stock_actual
     })),
     total_productos: productosSeleccionados.length,
-    total_unidades: productosSeleccionados.reduce((sum, p) => sum + p.cantidad, 0),
+    total_unidades: totalUnidades,
     motivo: formData.motivo,
     origen_nombre: formData.origen_nombre,
-    ubicacion: formData.ubicacion,
     notas: formData.notas,
     fecha: formData.fecha
   }
@@ -224,6 +232,7 @@ const EntradaView = () => {
   
   setEntradasPendientes(prev => [...prev, nuevaEntrada])
   setProductosSeleccionados([])
+  setFormData(prev => ({ ...prev, ubicacion: '' }))
   setSnackbar({ open: true, message: `✅ Entrada agregada a pendientes`, severity: 'success' })
 }
 
@@ -580,6 +589,7 @@ const handleRegistrarEntradas = async () => {
                   value={formData.ubicacion}
                   onChange={(e) => setFormData({ ...formData, ubicacion: e.target.value })}
                   placeholder="Ej: Estante A1, Almacén 3"
+                  helperText="Dejar vacío si no se asigna una ubicación específica"
                 />
               </Grid>
               

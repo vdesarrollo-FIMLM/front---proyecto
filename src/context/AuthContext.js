@@ -46,12 +46,13 @@ export const AuthProvider = ({ children }) => {
       
       // Redirigir según el rol
       if (userData.rol === 'super_admin') {
-        router.push('/inventario/dashboard')
+        router.push('/inventario/movimientos')
       } else if (userData.rol === 'admin') {
         router.push('/inventario/movimientos')
       } else {
         router.push('/inventario/entrada')
       }
+    
       
       return { success: true }
     } catch (error) {

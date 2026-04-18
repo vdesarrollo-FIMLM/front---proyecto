@@ -73,37 +73,26 @@ export const reservasService = {
   },
 
   async getStockDisponible(productoId, forceRefresh = false) {
-    try {
-      // Verificar cache
-      if (!forceRefresh && stockCache.has(productoId)) {
-        const cached = stockCache.get(productoId)
-        if (Date.now() - cached.timestamp < CACHE_TTL) {
-          return cached.data
-        }
-      }
-
-      const sessionId = getSessionId()
-      const response = await api.get(`/movimientos/reservas/stock-disponible/${productoId}`, {
-        params: { session_id: sessionId }
-      })
-      
-      // Guardar en cache
-      stockCache.set(productoId, {
-        data: response.data,
-        timestamp: Date.now()
-      })
-      
-      return response.data
-    } catch (error) {
-      console.error('Error obteniendo stock disponible:', error)
-      return {
-        stock_fisico: 0,
-        stock_disponible: 0,
-        stock_reservado_otros: 0,
-        stock_reservado_actual: 0
-      }
+  try {
+    const sessionId = getSessionId()
+    console.log(`🔵 Obteniendo stock disponible para ${productoId}`)
+    
+    const response = await api.get(`/movimientos/reservas/stock-disponible/${productoId}`, {
+      params: { session_id: sessionId }
+    })
+    
+    console.log(`✅ Stock para ${productoId}:`, response.data)
+    return response.data
+  } catch (error) {
+    console.error('Error obteniendo stock disponible:', error)
+    return {
+      stock_fisico: 0,
+      stock_disponible: 0,
+      stock_reservado_otros: 0,
+      stock_reservado_actual: 0
     }
-  },
+  }
+},
 
   // Limpiar cache manualmente
   clearCache() {
