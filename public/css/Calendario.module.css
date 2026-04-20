@@ -1,0 +1,5 @@
+.disabled-day {
+  color: red !important;
+  pointer-events: none; /* Opcional: deshabilita el clic en estas fechas */
+  background-color: #ffe6e6; /* Opcional: color de fondo */
+}

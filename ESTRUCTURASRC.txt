@@ -1,0 +1,460 @@
+SRC
+├───@core
+│   ├───components
+│   │   ├───auth
+│   │   │       AclGuard.js
+│   │   │       AuthGuard.js
+│   │   │       GuestGuard.js
+│   │   │
+│   │   ├───card-snippet
+│   │   │       index.js
+│   │   │
+│   │   ├───card-statistics
+│   │   │   ├───card-stats-horizontal
+│   │   │   │       index.js
+│   │   │   │
+│   │   │   ├───card-stats-vertical
+│   │   │   │       index.js
+│   │   │   │
+│   │   │   └───card-stats-with-image
+│   │   │           index.js
+│   │   │
+│   │   ├───custom-checkbox
+│   │   │   ├───basic
+│   │   │   │       index.js
+│   │   │   │
+│   │   │   ├───icons
+│   │   │   │       index.js
+│   │   │   │
+│   │   │   └───image
+│   │   │           index.js
+│   │   │
+│   │   ├───custom-radio
+│   │   │   ├───basic
+│   │   │   │       index.js
+│   │   │   │
+│   │   │   ├───icons
+│   │   │   │       index.js
+│   │   │   │
+│   │   │   └───image
+│   │   │           index.js
+│   │   │
+│   │   ├───customizer
+│   │   │       index.js
+│   │   │
+│   │   ├───icon
+│   │   │       index.js
+│   │   │
+│   │   ├───mui
+│   │   │   ├───avatar
+│   │   │   │       index.js
+│   │   │   │
+│   │   │   ├───badge
+│   │   │   │       index.js
+│   │   │   │
+│   │   │   ├───chip
+│   │   │   │       index.js
+│   │   │   │
+│   │   │   └───timeline-dot
+│   │   │           index.js
+│   │   │
+│   │   ├───option-menu
+│   │   │       index.js
+│   │   │
+│   │   ├───page-header
+│   │   │       index.js
+│   │   │
+│   │   ├───plan-details
+│   │   │       index.js
+│   │   │
+│   │   ├───react-apexcharts
+│   │   │       index.js
+│   │   │
+│   │   ├───repeater
+│   │   │       index.js
+│   │   │
+│   │   ├───scroll-to-top
+│   │   │       index.js
+│   │   │
+│   │   ├───sidebar
+│   │   │       index.js
+│   │   │
+│   │   ├───spinner
+│   │   │       index.js
+│   │   │
+│   │   └───window-wrapper
+│   │           index.js
+│   │
+│   ├───context
+│   │       settingsContext.js
+│   │
+│   ├───hooks
+│   │       useBgColor.js
+│   │       useClipboard.js
+│   │       useSettings.js
+│   │       useWsChats.js
+│   │
+│   ├───layouts
+│   │   │   BlankLayout.js
+│   │   │   BlankLayoutWithAppBar.js
+│   │   │   HorizontalLayout.js
+│   │   │   Layout.js
+│   │   │   utils.js
+│   │   │   VerticalLayout.js
+│   │   │
+│   │   └───components
+│   │       ├───blank-layout-with-appBar
+│   │       │       index.js
+│   │       │
+│   │       ├───horizontal
+│   │       │   ├───app-bar-content
+│   │       │   │       index.js
+│   │       │   │
+│   │       │   └───navigation
+│   │       │           HorizontalNavGroup.js
+│   │       │           HorizontalNavItems.js
+│   │       │           HorizontalNavLink.js
+│   │       │           index.js
+│   │       │
+│   │       ├───shared-components
+│   │       │   │   HomeDropdown.js
+│   │       │   │   LanguageDropdown.js
+│   │       │   │   ModeToggler.js
+│   │       │   │   NotificationDropdown.js
+│   │       │   │   ShortcutsDropdown.js
+│   │       │   │   UserDropdown.js
+│   │       │   │
+│   │       │   └───footer
+│   │       │           FooterContent.js
+│   │       │           index.js
+│   │       │
+│   │       └───vertical
+│   │           ├───appBar
+│   │           │       index.js
+│   │           │
+│   │           └───navigation
+│   │                   Drawer.js
+│   │                   index.js
+│   │                   VerticalNavGroup.js
+│   │                   VerticalNavHeader.js
+│   │                   VerticalNavItems.js
+│   │                   VerticalNavLink.js
+│   │                   VerticalNavSectionTitle.js
+│   │
+│   ├───styles
+│   │   ├───libs
+│   │   │   ├───fullcalendar
+│   │   │   │       index.js
+│   │   │   │
+│   │   │   ├───keen-slider
+│   │   │   │       index.js
+│   │   │   │
+│   │   │   ├───react-apexcharts
+│   │   │   │       index.js
+│   │   │   │
+│   │   │   ├───react-cleave
+│   │   │   │       index.js
+│   │   │   │
+│   │   │   ├───react-credit-cards
+│   │   │   │       index.js
+│   │   │   │
+│   │   │   ├───react-datepicker
+│   │   │   │       index.js
+│   │   │   │
+│   │   │   ├───react-draft-wysiwyg
+│   │   │   │       index.js
+│   │   │   │
+│   │   │   ├───react-dropzone
+│   │   │   │       index.js
+│   │   │   │
+│   │   │   ├───react-hot-toast
+│   │   │   │       index.js
+│   │   │   │
+│   │   │   └───recharts
+│   │   │           index.js
+│   │   │
+│   │   └───mui
+│   │           stepper.js
+│   │
+│   ├───theme
+│   │   │   globalStyles.js
+│   │   │   ThemeComponent.js
+│   │   │   ThemeOptions.js
+│   │   │
+│   │   ├───breakpoints
+│   │   │       index.js
+│   │   │
+│   │   ├───overrides
+│   │   │       accordion.js
+│   │   │       alerts.js
+│   │   │       autocomplete.js
+│   │   │       avatars.js
+│   │   │       backdrop.js
+│   │   │       breadcrumbs.js
+│   │   │       button.js
+│   │   │       buttonGroup.js
+│   │   │       card.js
+│   │   │       chip.js
+│   │   │       dataGrid.js
+│   │   │       dialog.js
+│   │   │       divider.js
+│   │   │       fab.js
+│   │   │       index.js
+│   │   │       input.js
+│   │   │       link.js
+│   │   │       list.js
+│   │   │       menu.js
+│   │   │       pagination.js
+│   │   │       paper.js
+│   │   │       popover.js
+│   │   │       progress.js
+│   │   │       rating.js
+│   │   │       select.js
+│   │   │       snackbar.js
+│   │   │       switches.js
+│   │   │       table.js
+│   │   │       tabs.js
+│   │   │       timeline.js
+│   │   │       toggleButton.js
+│   │   │       tooltip.js
+│   │   │       typography.js
+│   │   │
+│   │   ├───palette
+│   │   │       index.js
+│   │   │
+│   │   ├───shadows
+│   │   │       index.js
+│   │   │
+│   │   ├───spacing
+│   │   │       index.js
+│   │   │
+│   │   └───typography
+│   │           index.js
+│   │
+│   └───utils
+│           create-emotion-cache.js
+│           format.js
+│           get-daterange.js
+│           get-initials.js
+│           hex-to-rgba.js
+│           is-float.js
+│           rgba-to-hex.js
+│
+├───api
+│   │   geografico.js
+│   │   opciones.js
+│   │   utilidades.js
+│   │
+│   └───auth
+│       │   auth.js
+│       │
+│       └───nextauth
+│               route.js
+│
+├───components
+│   ├───datepicker
+│   │       date-picker.js
+│   │       PickersCustomInput.js
+│   │
+│   ├───editor
+│   │   │   EditorTexto.js
+│   │   │
+│   │   └───jodit-editor
+│   │           JoditEditorTexto.js
+│   │           onPasteEvents.js
+│   │
+│   ├───files-uploader
+│   │       CargaArchivos.js
+│   │       CargarArchivosPorTipo.js
+│   │       CargaTodoTipoArchivos.js
+│   │
+│   ├───formularios
+│   │       FormFecha.js
+│   │       FormInputTipoMoneda.js
+│   │       FormSelectBasico.js
+│   │       FormSelectReact.js
+│   │       FormTextField.js
+│   │       FormToggle.js
+│   │
+│   ├───modal
+│   │       BasicModal.js
+│   │       ModalDialog.js
+│   │
+│   ├───tablas
+│   │       QuickSearchToolbar.js
+│   │       TablaMobile.js
+│   │       TablaPaginada.js
+│   │
+│   ├───tabs
+│   │       CustomTab.js
+│   │
+│   └───visor-archivos-cargados
+│       │   AdjuntosHistoricos.js
+│       │   DrawerSoporte.js
+│       │   VisorArchivosCargados.js
+│       │   VistaPreviaArchivo.js
+│       │
+│       ├───archivos-cargados
+│       │       ArchivosCargados.js
+│       │       ListaArchivosCargados.js
+│       │       useArchivosCargados.js
+│       │
+│       ├───protegidos
+│       │       ModalArchivos.js
+│       │       VisorArchivosProtegidos.js
+│       │
+│       ├───swiper-solicitudes
+│       │       CarouselSolicitudes.js
+│       │       CintaListaSolicitudes.js
+│       │       SwiperSolicitudes.js
+│       │
+│       └───visualizador-archivos
+│               ListaArchivos.js
+│               useVisualizadorArchivos.js
+│               VisorSwiper.js
+│               VisualizadorArchivos.js
+│               VisualizadorArchivosWithPDF.js
+│
+├───configs
+│       acl.js
+│       auth.js
+│       axios.js
+│       firebase.js
+│       i18n.js
+│       themeConfig.js
+│
+├───context
+│       AuthContext.js
+│
+├───hooks
+│       useAuth.js
+│       useServerStatus.js
+│
+├───iconify-bundle
+│       bundle-icons-react.js
+│       icons-bundle-react.js
+│
+├───layouts
+│   │   InventarioLayout.js
+│   │   UserLayout.js
+│   │   UserThemeOptions.js
+│   │
+│   └───components
+│       │   CustomFooter.js
+│       │   CustomNavbar.js
+│       │   Direction.js
+│       │   Translations.js
+│       │   UserIcon.js
+│       │
+│       ├───acl
+│       │       Can.js
+│       │       CanViewConfiguration.js
+│       │       CanViewItems.js
+│       │       CanViewNavGroup.js
+│       │       CanViewNavLink.js
+│       │       CanViewNavSectionTitle.js
+│       │       CanViewProfile.js
+│       │
+│       ├───horizontal
+│       │       AppBarContent.js
+│       │       ServerSideNavItems.js
+│       │
+│       └───vertical
+│               AppBarContent.js
+│               ServerSideNavItems.js
+│
+├───navigation
+│   ├───horizontal
+│   │       index.js
+│   │
+│   └───vertical
+│           index.js
+│
+├───pages
+│   │   401.js
+│   │   404.js
+│   │   500.js
+│   │   index.js
+│   │   _app.js
+│   │   _document.js
+│   │
+│   ├───error
+│   │   └───no-autorizado
+│   │           index.js
+│   │
+│   ├───home
+│   │       index.js
+│   │
+│   └───inventario
+│       │   cargar-excel.js
+│       │   dashboard.js
+│       │   entrada.js
+│       │   escanear.js
+│       │   index.js
+│       │   movimientos.js
+│       │   productos.js
+│       │   salida.js
+│       │
+│       └───productos
+│           │   crear.js
+│           │   [id].js
+│           │
+│           └───editar
+│                   [id].js
+│
+├───services
+│   │   api.js
+│   │
+│   └───inventario
+│           dashboard.service.js
+│           entradas.service.js
+│           excel.service.js
+│           movimientos.service.js
+│           productos.service.js
+│           reservas.service.js
+│           salidas.service.js
+│
+├───utils
+│       ColoresEstados.js
+│       CombinacionNombres.js
+│       formatDate.js
+│       funciones.js
+│       Iconos.js
+│       utilidades.js
+│
+├───validation
+│       ValidarParentesco.js
+│
+└───views
+    ├───apps
+    │   ├───home
+    │   │       CardError.js
+    │   │       CardInicio.js
+    │   │       Home.js
+    │   │
+    │   └───inventario
+    │       │   CargarExcelView.js
+    │       │   CrearProductoView.js
+    │       │   DashboardView.js
+    │       │   DetalleProductoView.js
+    │       │   EditarProductoView.js
+    │       │   EntradaView.js
+    │       │   EscanerView.js
+    │       │   FileDropzone.js
+    │       │   MovimientosView.js
+    │       │   ProductosView.js
+    │       │   SalidaView.js
+    │       │
+    │       └───components
+    │               FileDropzone.js
+    │               MultipleScannerModal.js
+    │               ProductoResultCard.js
+    │               QRScanner.js
+    │               QRScannerModal.js
+    │
+    └───pages
+        ├───auth
+        │       FooterIllustrationsV2.js
+        │
+        └───misc
+                FooterIllustrations.js
