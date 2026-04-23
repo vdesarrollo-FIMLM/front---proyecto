@@ -129,7 +129,8 @@ const cargarUbicacionesProducto = async (productoId) => {
     const sessionId = getSessionId()
     console.log(`🔵 Cargando ubicaciones para producto: ${productoId}`)
     
-    const response = await fetch(`http://localhost:8000/api/productos/${productoId}/stock-por-ubicacion?session_id=${sessionId}`)
+    const url = `http://localhost:8000/api/productos/${productoId}/stock-por-ubicacion?session_id=${sessionId}&_=${Date.now()}`
+    const response = await fetch(url)
     
     if (!response.ok) {
       console.error(`Error ${response.status}: ${response.statusText}`)
@@ -137,23 +138,29 @@ const cargarUbicacionesProducto = async (productoId) => {
       return []
     }
     
-    const data = await response.json()
-    console.log(`📍 Ubicaciones encontradas:`, data)
+     const data = await response.json()
+    console.log(`📍 Respuesta del backend:`, data)
 
-    let ubicacionesArray = []
-    if (Array.isArray(data)) {
-      ubicacionesArray = data
-    } else if (data && typeof data === 'object') {
-      ubicacionesArray = Object.values(data)
-    }
+    // Obtener el array de ubicaciones
+    const ubicacionesArray = data.stock_por_ubicacion || []
     
-    // Filtrar solo ubicaciones con stock disponible
-    const ubicacionesConStock = data.filter(ub => ub.stock_disponible > 0)
+    // ✅ Filtrar solo ubicaciones con stock DISPONIBLE > 0
+    const ubicacionesConStock = ubicacionesArray.filter(ub => ub.stock_disponible > 0)
+    
+    // ✅ Mostrar stock_disponible al usuario (no stock_fisico)
+    const ubicacionesFormateadas = ubicacionesConStock.map(ub => ({
+      ...ub,
+      label: `${ub.ubicacion} (Disponible: ${ub.stock_disponible})`,
+      stock_mostrar: ub.stock_disponible
+    }))
+
+    console.log(`📍 Ubicaciones con stock:`, ubicacionesConStock)
     setUbicacionesDisponibles(ubicacionesConStock)
     
     return ubicacionesConStock
   } catch (error) {
     console.error('Error cargando ubicaciones:', error)
+    setUbicacionesDisponibles([])
     return []
   }
 }
@@ -169,55 +176,59 @@ const cargarUbicacionesProducto = async (productoId) => {
   }, [])
 
   const cargarReservaPendiente = async () => {
-    try {
-      const reserva = await reservasService.obtenerReserva()
-      if (reserva && reserva.items && reserva.items.length > 0) {
-        console.log('🔄 Cargando reserva pendiente:', reserva)
-        
-        const itemsConStockActualizado = await Promise.all(
-          reserva.items.map(async (item) => {
-            const stockInfo = await reservasService.getStockDisponible(item.producto_id)
-            return {
-              ...item,
-              stock_actual: stockInfo.stock_disponible,
-              stock_fisico: stockInfo.stock_fisico
-            }
-          })
-        )
-        
-        const itemsPendientes = itemsConStockActualizado.map(item => ({
-          id: Date.now() + Math.random(),
-          tipo: item.tipo === 'kit' ? 'kit' : (item.tipo === 'multiple' ? 'multiple' : 'normal'),
-          nombre: item.nombre,
-          productos: item.productos || [{
-            producto_id: item.producto_id,
-            producto_nombre: item.producto_nombre,
-            producto_codigo: item.producto_codigo,
-            cantidad: item.cantidad,
-            cantidad_por_kit: item.cantidad_por_kit,
-            cantidad_total: item.cantidad_total || item.cantidad
-          }],
-          producto_id: item.producto_id,
-          producto_nombre: item.producto_nombre,
-          producto_codigo: item.producto_codigo,
-          cantidad: item.cantidad,
-          cantidad_kits: item.cantidad_kits,
-          motivo: item.motivo || 'Entrega de Ayudas',
-          cliente: reserva.datos_adicionales?.cliente || '',
-          notas: reserva.datos_adicionales?.notas || '',
-          fecha: reserva.datos_adicionales?.fecha || new Date().toISOString().slice(0, 16),
-          stock_restante: item.stock_actual - item.cantidad,
-          stock_actual: item.stock_actual,
-          stock_fisico: item.stock_fisico,
-          stock_minimo: item.stock_minimo || 5
-        }))
-        
-        setSalidasPendientes(itemsPendientes)
-      }
-    } catch (error) {
-      console.error('Error cargando reserva:', error)
+  try {
+    const reserva = await reservasService.obtenerReserva()
+    if (reserva && reserva.items && reserva.items.length > 0) {
+      console.log('🔄 Cargando reserva pendiente:', reserva)
+      
+      // Obtener stock actualizado para cada producto
+      const itemsConStockActualizado = await Promise.all(
+        reserva.items.map(async (item) => {
+          const stockInfo = await reservasService.getStockDisponible(item.producto_id)
+          return {
+            ...item,
+            stock_actual: stockInfo.stock_disponible,
+            stock_fisico: stockInfo.stock_fisico
+          }
+        })
+      )
+      
+      const itemsPendientes = itemsConStockActualizado.map(item => ({
+        id: Date.now() + Math.random(),
+        tipo: item.tipo || 'normal',
+        nombre: item.nombre,
+        productos: item.tipo === 'kit' || item.tipo === 'multiple' 
+          ? (item.productos || [{
+              producto_id: item.producto_id,
+              producto_nombre: item.producto_nombre,
+              producto_codigo: item.producto_codigo,
+              ubicacion: item.ubicacion,  // ← AGREGAR UBICACIÓN
+              cantidad: item.cantidad,
+              cantidad_total: item.cantidad_total || item.cantidad
+            }])
+          : null,
+        producto_id: item.producto_id,
+        producto_nombre: item.producto_nombre,
+        producto_codigo: item.producto_codigo,
+        ubicacion: item.ubicacion,  // ← AGREGAR UBICACIÓN
+        cantidad: item.cantidad,
+        cantidad_kits: item.cantidad_kits,
+        motivo: item.motivo || 'Entrega de Ayudas',
+        cliente: reserva.datos_adicionales?.cliente || '',
+        notas: reserva.datos_adicionales?.notas || '',
+        fecha: reserva.datos_adicionales?.fecha || new Date().toISOString().slice(0, 16),
+        stock_restante: item.stock_actual - item.cantidad,
+        stock_actual: item.stock_actual,
+        stock_fisico: item.stock_fisico,
+        stock_minimo: item.stock_minimo || 5
+      }))
+      
+      setSalidasPendientes(itemsPendientes)
     }
+  } catch (error) {
+    console.error('Error cargando reserva:', error)
   }
+}
 
   const cargarUltimasSalidas = async () => {
     try {
@@ -284,7 +295,7 @@ const handleSelectProduct = async (producto) => {
   // Modo kit o ayudas/unidades -> agregar a lista
   if (isModoKit || isModoAyudasUnidades) {
     // Cargar ubicaciones disponibles para mostrar
-    const ubicaciones = await cargarUbicacionesProducto(producto.codigo)
+    const ubicaciones = await cargarUbicacionesProducto(producto.codigo, true)
     
     if (!ubicaciones || ubicaciones.length === 0) {
       setSnackbar({ 
@@ -627,9 +638,23 @@ if (!stockCheck.valido) {
           notas: kit.notas,
           fecha: kit.fecha
         })
-        reservasService.clearCache()
-        setSnackbar({ open: true, message: `✅ Kit "${formData.kitNombre}" agregado y stock reservado`, severity: 'success' })
-      } catch (error) {
+         const productosActualizados = productosKit.map(p => {
+      const itemReservado = itemsParaReserva.find(ir => 
+        ir.producto_id === p.codigo && ir.ubicacion === p.ubicacion
+      )
+      if (itemReservado) {
+        return {
+          ...p,
+          stock_en_ubicacion: (p.stock_en_ubicacion || p.stock_actual) - itemReservado.cantidad
+        }
+      }
+      return p
+    })
+    setProductosKit(productosActualizados)
+    
+    reservasService.clearCache()
+    setSnackbar({ open: true, message: `✅ Kit "${formData.kitNombre}" agregado y stock reservado`, severity: 'success' })
+  } catch (error) {
         setSnackbar({ open: true, message: `❌ Error reservando stock: ${error.response?.data?.detail || error.message}`, severity: 'error' })
         return
       }
@@ -707,8 +732,22 @@ if (!stockCheck.valido) {
           notas: salidaMultiple.notas,
           fecha: salidaMultiple.fecha
         })
-        setSnackbar({ open: true, message: `✅ ${productosKit.length} productos agregados`, severity: 'success' })
-      } catch (error) {
+        const productosActualizados = productosKit.map(p => {
+      const itemReservado = itemsParaReserva.find(ir => 
+        ir.producto_id === p.codigo && ir.ubicacion === p.ubicacion
+      )
+      if (itemReservado) {
+        return {
+          ...p,
+          stock_en_ubicacion: (p.stock_en_ubicacion || p.stock_actual) - itemReservado.cantidad
+        }
+      }
+      return p
+    })
+    setProductosKit(productosActualizados)
+    
+    setSnackbar({ open: true, message: `✅ ${productosKit.length} productos agregados`, severity: 'success' })
+  } catch (error) {
         setSnackbar({ open: true, message: `❌ Error reservando stock: ${error.response?.data?.detail || error.message}`, severity: 'error' })
         return
       }
@@ -771,8 +810,14 @@ const itemsParaReserva = [{
           notas: salida.notas,
           fecha: salida.fecha
         })
-        setSnackbar({ open: true, message: `✅ ${formData.cantidad} unidades reservadas de "${productoSeleccionado.nombre}"`, severity: 'success' })
-      } catch (error) {
+        setProductoSeleccionado(prev => ({
+      ...prev,
+      stock_actual: prev.stock_actual - formData.cantidad,
+      stock_en_ubicacion: (prev.stock_en_ubicacion || prev.stock_actual) - formData.cantidad
+    }))
+    
+    setSnackbar({ open: true, message: `✅ ${formData.cantidad} unidades reservadas de "${productoSeleccionado.nombre}"`, severity: 'success' })
+  } catch (error) {
         setSnackbar({ open: true, message: `❌ Error reservando stock: ${error.response?.data?.detail || error.message}`, severity: 'error' })
         return
       }
@@ -793,81 +838,130 @@ const itemsParaReserva = [{
           message: `✅ ${resultado.movimientos.length} salida(s) confirmada(s)`, 
           severity: 'success' 
         })
-        setSalidasPendientes(prev => prev.filter((_, i) => i !== index))
-        await cargarUltimasSalidas()
-        reservasService.clearCache()
+       if (item.tipo === 'kit') {
+        // Para cada producto del kit, actualizar el stock en la lista de productosKit
+        setProductosKit(prev => 
+          prev.map(p => {
+            const productoAfectado = item.productos.find(ip => ip.producto_id === p.producto_id && ip.ubicacion === p.ubicacion)
+            if (productoAfectado) {
+              return {
+                ...p,
+                stock_en_ubicacion: (p.stock_en_ubicacion || p.stock_actual) - productoAfectado.cantidad_total,
+                stock_actual: (p.stock_actual || 0) - productoAfectado.cantidad_total
+              }
+            }
+            return p
+          })
+        )
       } else {
-        throw new Error(resultado.message || 'Error al confirmar')
+        // Salida normal - actualizar el stock del producto en el estado
+        if (productoSeleccionado && productoSeleccionado.codigo === item.producto_id) {
+          setProductoSeleccionado(prev => ({
+            ...prev,
+            stock_actual: (prev.stock_actual || 0) - item.cantidad,
+            stock_en_ubicacion: (prev.stock_en_ubicacion || prev.stock_actual) - item.cantidad
+          }))
+        }
       }
       
-    } catch (error) {
-      setSnackbar({ 
-        open: true, 
-        message: `❌ Error al confirmar: ${error.response?.data?.detail || error.message}`, 
-        severity: 'error' 
-      })
-    } finally {
-      setLoading(false)
+      setSalidasPendientes(prev => prev.filter((_, i) => i !== index))
+      await cargarUltimasSalidas()
+      reservasService.clearCache()
+      
+    } else {
+      throw new Error(resultado.message || 'Error al confirmar')
     }
+    
+  } catch (error) {
+    setSnackbar({ 
+      open: true, 
+      message: `❌ Error al confirmar: ${error.response?.data?.detail || error.message}`, 
+      severity: 'error' 
+    })
+  } finally {
+    setLoading(false)
   }
+}
 
   const handleEliminarPendiente = async (index) => {
-    const item = salidasPendientes[index]
-    if (window.confirm(`¿Eliminar ${item.tipo === 'kit' ? `kit "${item.nombre}"` : item.tipo === 'multiple' ? `salida múltiple de ${item.productos?.length} productos` : `salida de ${item.cantidad} unidades de "${item.producto_nombre}"`} de la lista de pendientes?`)) {
-      
-      const ajustes = []
-      
-      if (item.tipo === 'kit') {
-        for (const producto of item.productos) {
-          ajustes.push({
-            producto_id: producto.producto_id,
-            diferencia: -producto.cantidad_total,
-            producto_nombre: producto.producto_nombre,
-            producto_codigo: producto.producto_codigo
-          })
-        }
-      } else if (item.tipo === 'multiple') {
-        for (const producto of item.productos) {
-          ajustes.push({
-            producto_id: producto.producto_id,
-            diferencia: -producto.cantidad,
-            producto_nombre: producto.producto_nombre,
-            producto_codigo: producto.producto_codigo
-          })
-        }
-      } else {
-        ajustes.push({
-          producto_id: item.producto_id,
-          diferencia: -item.cantidad,
-          producto_nombre: item.producto_nombre,
-          producto_codigo: item.producto_codigo
-        })
-      }
-      
-      try {
-        await reservasService.ajustarReserva(ajustes, {
-          tipo: 'eliminacion',
-          motivo: 'Salida cancelada'
-        })
-        
-        setSalidasPendientes(prev => prev.filter((_, i) => i !== index))
-        
-        const mensajes = ajustes.map(a => 
-          `${a.producto_nombre}: ${Math.abs(a.diferencia)} unidades liberadas`
-        )
-        setSnackbar({ open: true, message: `✅ Stock liberado: ${mensajes.join(', ')}`, severity: 'success' })
-        
-        if (typeof cargarUltimasSalidas === 'function') {
-          cargarUltimasSalidas()
-        }
-        
-        reservasService.clearCache()
-        
-      } catch (error) {
-        setSnackbar({ open: true, message: `Error al liberar stock: ${error.response?.data?.detail || error.message}`, severity: 'error' })
-      }
-    }
+  const item = salidasPendientes[index]
+  
+
+  console.log('🗑️ Eliminando item:', item)
+  console.log('🗑️ Tipo:', item.tipo)
+  console.log('🗑️ Productos:', item.productos)
+
+  let mensajeConfirmacion = ''
+  if (item.tipo === 'kit') {
+    mensajeConfirmacion = `¿Eliminar el kit "${item.nombre}" con ${item.productos?.length} productos?`
+  } else if (item.tipo === 'multiple') {
+    mensajeConfirmacion = `¿Eliminar salida múltiple de ${item.productos?.length} productos?`
+  } else {
+    mensajeConfirmacion = `¿Eliminar salida de ${item.cantidad} unidades de "${item.producto_nombre}"?`
   }
+  
+  if (!window.confirm(mensajeConfirmacion)) return
+  
+  const ajustes = []
+  
+  if (item.tipo === 'kit') {
+  console.log('🔍 Productos del kit:', JSON.stringify(item.productos, null, 2))
+  for (const producto of item.productos) {
+    console.log(`   producto_id: ${producto.producto_id}, ubicacion: ${producto.ubicacion}`)
+    ajustes.push({
+      producto_id: producto.producto_id,
+      ubicacion: producto.ubicacion, 
+      diferencia: -producto.cantidad_total,
+      producto_nombre: producto.producto_nombre,
+      producto_codigo: producto.producto_codigo
+    })
+  }
+} else if (item.tipo === 'multiple') {
+    for (const producto of item.productos) {
+      ajustes.push({
+        producto_id: producto.producto_id,
+        ubicacion: producto.ubicacion,  // ← AGREGAR UBICACIÓN
+        diferencia: -producto.cantidad,
+        producto_nombre: producto.producto_nombre,
+        producto_codigo: producto.producto_codigo
+      })
+    }
+  } else {
+    // Modo normal - un solo producto
+    ajustes.push({
+      producto_id: item.producto_id,
+      ubicacion: item.ubicacion,  // ← AGREGAR UBICACIÓN
+      diferencia: -item.cantidad,
+      producto_nombre: item.producto_nombre,
+      producto_codigo: item.producto_codigo
+    })
+  }
+  
+  console.log('📦 Ajustes a enviar:', ajustes)  // ← Debe mostrar ubicación
+  
+  try {
+    await reservasService.ajustarReserva(ajustes, {
+      tipo: 'eliminacion',
+      motivo: 'Salida cancelada'
+    })
+    
+    setSalidasPendientes(prev => prev.filter((_, i) => i !== index))
+    
+    const mensajes = ajustes.map(a => 
+      `${a.producto_nombre} (${a.ubicacion}): ${Math.abs(a.diferencia)} unidades liberadas`
+    )
+    setSnackbar({ open: true, message: `✅ Stock liberado: ${mensajes.join(', ')}`, severity: 'success' })
+    
+    if (typeof cargarUltimasSalidas === 'function') {
+      cargarUltimasSalidas()
+    }
+    
+    reservasService.clearCache()
+    
+  } catch (error) {
+    setSnackbar({ open: true, message: `Error al liberar stock: ${error.response?.data?.detail || error.message}`, severity: 'error' })
+  }
+}
 
   const handleEditarSalida = (item) => {
     setEditandoSalida(item)
@@ -908,9 +1002,10 @@ const itemsParaReserva = [{
       updatedItem.cantidad_kits = editCantidad
       
       const productosOriginales = {}
-      editandoSalida.productos.forEach(p => {
-        productosOriginales[p.producto_id] = p.cantidad_total
-      })
+  editandoSalida.productos.forEach(p => {
+    const key = `${p.producto_id}|${p.ubicacion || 'SIN_UBICACION'}`
+    productosOriginales[key] = p.cantidad_total
+  })
       
       updatedItem.productos = editProductosKit.map(p => ({
         ...p,
@@ -919,13 +1014,15 @@ const itemsParaReserva = [{
       updatedItem.total_unidades = updatedItem.productos.reduce((sum, p) => sum + p.cantidad_total, 0)
       
       for (const producto of updatedItem.productos) {
-        const cantidadOriginal = productosOriginales[producto.producto_id] || 0
+        const key = `${producto.producto_id}|${producto.ubicacion || 'SIN_UBICACION'}`
+        const cantidadOriginal = productosOriginales[key] || 0
         const cantidadNueva = producto.cantidad_total
         const diferencia = cantidadNueva - cantidadOriginal
         
         if (diferencia !== 0) {
           ajustes.push({
             producto_id: producto.producto_id,
+            ubicacion: producto.ubicacion,
             diferencia: diferencia,
             producto_nombre: producto.producto_nombre,
             producto_codigo: producto.producto_codigo
@@ -933,17 +1030,19 @@ const itemsParaReserva = [{
         }
       }
       
-      for (const [productoId, cantidadOriginal] of Object.entries(productosOriginales)) {
-        const existe = updatedItem.productos.find(p => p.producto_id === productoId)
-        if (!existe) {
-          ajustes.push({
-            producto_id: productoId,
-            diferencia: -cantidadOriginal,
-            producto_nombre: editandoSalida.productos.find(p => p.producto_id === productoId)?.producto_nombre || productoId,
-            producto_codigo: editandoSalida.productos.find(p => p.producto_id === productoId)?.producto_codigo || productoId
-          })
-        }
-      }
+      for (const [key, cantidadOriginal] of Object.entries(productosOriginales)) {
+       const existe = updatedItem.productos.some(p => `${p.producto_id}|${p.ubicacion || 'SIN_UBICACION'}` === key )
+  if (!existe) {
+    const [productoId, ubicacion] = key.split('|')
+    ajustes.push({
+      producto_id: productoId,
+      ubicacion: ubicacion === 'SIN_UBICACION' ? null : ubicacion,
+      diferencia: -cantidadOriginal,
+      producto_nombre: editandoSalida.productos.find(p => p.producto_id === productoId)?.producto_nombre || productoId,
+      producto_codigo: editandoSalida.productos.find(p => p.producto_id === productoId)?.producto_codigo || productoId
+    })
+  }
+}
       
     } else if (editandoSalida.tipo === 'multiple') {
       updatedItem.motivo = editFormData.motivo
@@ -953,8 +1052,9 @@ const itemsParaReserva = [{
       
       const productosOriginales = {}
       editandoSalida.productos.forEach(p => {
-        productosOriginales[p.producto_id] = p.cantidad
-      })
+        const key = `${p.producto_id}|${p.ubicacion || 'SIN_UBICACION'}`
+        productosOriginales[key] = p.cantidad
+  })
       
       updatedItem.productos = editProductosKit.map(p => ({
         ...p,
@@ -962,13 +1062,15 @@ const itemsParaReserva = [{
       }))
       
       for (const producto of updatedItem.productos) {
-        const cantidadOriginal = productosOriginales[producto.producto_id] || 0
-        const cantidadNueva = producto.cantidad
-        const diferencia = cantidadNueva - cantidadOriginal
+       const key = `${producto.producto_id}|${producto.ubicacion || 'SIN_UBICACION'}`
+       const cantidadOriginal = productosOriginales[key] || 0
+       const cantidadNueva = producto.cantidad
+       const diferencia = cantidadNueva - cantidadOriginal
         
         if (diferencia !== 0) {
           ajustes.push({
             producto_id: producto.producto_id,
+            ubicacion: producto.ubicacion,
             diferencia: diferencia,
             producto_nombre: producto.producto_nombre,
             producto_codigo: producto.producto_codigo
@@ -976,17 +1078,18 @@ const itemsParaReserva = [{
         }
       }
       
-      for (const [productoId, cantidadOriginal] of Object.entries(productosOriginales)) {
-        const existe = updatedItem.productos.find(p => p.producto_id === productoId)
-        if (!existe) {
-          ajustes.push({
-            producto_id: productoId,
-            diferencia: -cantidadOriginal,
-            producto_nombre: editandoSalida.productos.find(p => p.producto_id === productoId)?.producto_nombre || productoId,
-            producto_codigo: editandoSalida.productos.find(p => p.producto_id === productoId)?.producto_codigo || productoId
-          })
-        }
-      }
+      for (const [key, cantidadOriginal] of Object.entries(productosOriginales)) {const existe = updatedItem.productos.some(p => `${p.producto_id}|${p.ubicacion || 'SIN_UBICACION'}` === key)
+  if (!existe) {
+    const [productoId, ubicacion] = key.split('|')
+    ajustes.push({
+      producto_id: productoId,
+      ubicacion: ubicacion === 'SIN_UBICACION' ? null : ubicacion,
+      diferencia: -cantidadOriginal,
+      producto_nombre: editandoSalida.productos.find(p => p.producto_id === productoId)?.producto_nombre || productoId,
+      producto_codigo: editandoSalida.productos.find(p => p.producto_id === productoId)?.producto_codigo || productoId
+    })
+  }
+}
       
     } else {
       const cantidadOriginal = editandoSalida.cantidad
@@ -1082,72 +1185,120 @@ const itemsParaReserva = [{
     }
   }
 
-  const handleAgregarProductoAEdicion = (producto) => {
-    if (editandoSalida.tipo === 'kit' || editandoSalida.tipo === 'multiple') {
-      const existente = editProductosKit.find(p => p.producto_id === producto.id)
-      if (existente) {
-        const nuevosProductos = editProductosKit.map(p =>
-          p.producto_id === producto.id 
-            ? { ...p, cantidad_por_kit: p.cantidad_por_kit + 1 }
-            : p
-        )
-        setEditProductosKit(nuevosProductos)
-        setSnackbar({ open: true, message: `${producto.nombre}: +1 unidad`, severity: 'success' })
-      } else {
-        setEditProductosKit(prev => [
-          ...prev,
-          {
-            producto_id: producto.id,
-            producto_nombre: producto.nombre,
-            producto_codigo: producto.codigo,
-            cantidad_por_kit: 1,
-            cantidad_total: 1,
-            stock_disponible: producto.stock_actual
-          }
-        ])
-        setSnackbar({ open: true, message: `${producto.nombre} agregado`, severity: 'success' })
-      }
-    } else {
-      const confirmar = window.confirm(
-        `Esta salida actualmente tiene el producto "${editandoSalida.producto_nombre}".\n\n` +
-        `¿Deseas agregar "${producto.nombre}"? Esto convertirá la salida en un KIT con múltiples productos.\n\n` +
-        `¿Continuar?`
-      )
-      
-      if (confirmar) {
-        const nuevosProductos = [
-          {
-            producto_id: editandoSalida.producto_id,
-            producto_nombre: editandoSalida.producto_nombre,
-            producto_codigo: editandoSalida.producto_codigo,
-            cantidad_por_kit: editandoSalida.cantidad,
-            cantidad_total: editandoSalida.cantidad,
-            stock_disponible: editandoSalida.stock_actual
-          },
-          {
-            producto_id: producto.id,
-            producto_nombre: producto.nombre,
-            producto_codigo: producto.codigo,
-            cantidad_por_kit: 1,
-            cantidad_total: 1,
-            stock_disponible: producto.stock_actual
-          }
-        ]
-        
-        setEditandoSalida(prev => ({
-          ...prev,
-          tipo: 'multiple',
-          nombre: `Salida múltiple (${editandoSalida.producto_nombre} + ${producto.nombre})`,
-          productos: nuevosProductos
-        }))
-        setEditProductosKit(nuevosProductos)
-        setSnackbar({ open: true, message: `Salida convertida a MÚLTIPLE con 2 productos`, severity: 'success' })
-      }
+  const handleAgregarProductoAEdicion = async (producto) => {
+  // 1. Cargar ubicaciones disponibles para el producto
+  const ubicaciones = await cargarUbicacionesProducto(producto.codigo)
+  
+  if (!ubicaciones || ubicaciones.length === 0) {
+    setSnackbar({ 
+      open: true, 
+      message: `⚠️ El producto ${producto.nombre} no tiene stock en ninguna ubicación.`, 
+      severity: 'warning' 
+    })
+    return
+  }
+  
+  // 2. Seleccionar ubicación (igual que en handleSelectProduct)
+  let ubicacionSeleccionada = null
+  let stockEnUbicacion = 0
+  
+  if (ubicaciones.length > 1) {
+    const opciones = ubicaciones.map((ub, idx) => 
+      `${idx + 1}. ${ub.ubicacion} (${ub.stock_disponible} disponibles)`
+    ).join('\n')
+    
+    const seleccion = prompt(
+      `Selecciona ubicación para ${producto.nombre}:\n\n${opciones}\n\nIngresa el número de la ubicación:`
+    )
+    
+    if (!seleccion) return
+    
+    const idxSeleccionado = parseInt(seleccion) - 1
+    if (isNaN(idxSeleccionado) || idxSeleccionado < 0 || idxSeleccionado >= ubicaciones.length) {
+      setSnackbar({ open: true, message: 'Selección no válida', severity: 'error' })
+      return
     }
     
-    setEditSearchTerm('')
-    setEditShowSearchResults(false)
+    ubicacionSeleccionada = ubicaciones[idxSeleccionado]
+    stockEnUbicacion = ubicacionSeleccionada.stock_disponible
+  } else {
+    ubicacionSeleccionada = ubicaciones[0]
+    stockEnUbicacion = ubicacionSeleccionada.stock_disponible
   }
+  
+  // 3. Agregar a la edición con la ubicación seleccionada
+  if (editandoSalida.tipo === 'kit' || editandoSalida.tipo === 'multiple') {
+    const existente = editProductosKit.find(p => p.producto_id === producto.id && p.ubicacion === ubicacionSeleccionada.ubicacion)
+    
+    if (existente) {
+      // Si ya existe el mismo producto en la misma ubicación, sumar cantidad
+      const nuevosProductos = editProductosKit.map(p =>
+        p.producto_id === producto.id && p.ubicacion === ubicacionSeleccionada.ubicacion
+          ? { ...p, cantidad_por_kit: p.cantidad_por_kit + 1, cantidad_total: (p.cantidad_por_kit + 1) * (editandoSalida.cantidad_kits || 1) }
+          : p
+      )
+      setEditProductosKit(nuevosProductos)
+      setSnackbar({ open: true, message: `${producto.nombre}: +1 unidad en ${ubicacionSeleccionada.ubicacion}`, severity: 'success' })
+    } else {
+      // Nuevo producto en esta ubicación
+      setEditProductosKit(prev => [
+        ...prev,
+        {
+          producto_id: producto.id,
+          producto_nombre: producto.nombre,
+          producto_codigo: producto.codigo,
+          ubicacion: ubicacionSeleccionada.ubicacion,
+          cantidad_por_kit: 1,
+          cantidad_total: 1,
+          stock_disponible: stockEnUbicacion
+        }
+      ])
+      setSnackbar({ open: true, message: `${producto.nombre} agregado en ${ubicacionSeleccionada.ubicacion}`, severity: 'success' })
+    }
+  } else {
+    // Modo normal -> convertir a múltiple
+    const confirmar = window.confirm(
+      `Esta salida actualmente tiene el producto "${editandoSalida.producto_nombre}".\n\n` +
+      `¿Deseas agregar "${producto.nombre}" en ${ubicacionSeleccionada.ubicacion}? Esto convertirá la salida en una salida MÚLTIPLE.\n\n` +
+      `¿Continuar?`
+    )
+    
+    if (confirmar) {
+      const nuevosProductos = [
+        {
+          producto_id: editandoSalida.producto_id,
+          producto_nombre: editandoSalida.producto_nombre,
+          producto_codigo: editandoSalida.producto_codigo,
+          ubicacion: editandoSalida.ubicacion || 'SIN_UBICACION',
+          cantidad_por_kit: editandoSalida.cantidad,
+          cantidad_total: editandoSalida.cantidad,
+          stock_disponible: editandoSalida.stock_actual
+        },
+        {
+          producto_id: producto.id,
+          producto_nombre: producto.nombre,
+          producto_codigo: producto.codigo,
+          ubicacion: ubicacionSeleccionada.ubicacion,
+          cantidad_por_kit: 1,
+          cantidad_total: 1,
+          stock_disponible: stockEnUbicacion
+        }
+      ]
+      
+      setEditandoSalida(prev => ({
+        ...prev,
+        tipo: 'multiple',
+        nombre: `Salida múltiple (${editandoSalida.producto_nombre} + ${producto.nombre})`,
+        productos: nuevosProductos
+      }))
+      setEditProductosKit(nuevosProductos)
+      setSnackbar({ open: true, message: `Salida convertida a MÚLTIPLE con 2 productos`, severity: 'success' })
+    }
+  }
+  
+  setEditSearchTerm('')
+  setEditShowSearchResults(false)
+}
 
   const handleVerDetallePendiente = (item) => {
     setDetalleSalida(item)

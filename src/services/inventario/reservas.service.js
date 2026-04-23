@@ -45,18 +45,20 @@ export const reservasService = {
   },
 
   async eliminarReserva() {
-    try {
-      const sessionId = getSessionId()
-      const response = await api.delete('/movimientos/reservas/eliminar', {
-        params: { session_id: sessionId }
-      })
-      stockCache.clear()
-      return response.data
-    } catch (error) {
-      console.error('Error eliminando reserva:', error)
-      throw error
-    }
-  },
+  try {
+    const sessionId = getSessionId()
+    console.log(`🔵 Eliminando reserva: ${sessionId}`)
+    const response = await api.delete('/movimientos/reservas/eliminar', {
+      params: { session_id: sessionId }
+    })
+    console.log('✅ Respuesta:', response.data)
+    stockCache.clear()
+    return response.data
+  } catch (error) {
+    console.error('Error eliminando reserva:', error)
+    throw error
+  }
+},
 
   async confirmarReserva() {
     try {

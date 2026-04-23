@@ -53,6 +53,7 @@ import {
 } from '@mui/icons-material'
 import { productosService } from 'src/services/inventario/productos.service'
 import { reservasService } from 'src/services/inventario/reservas.service'
+import GestionUbicaciones from './components/GestionUbicaciones'
 
 const ProductosView = () => {
   const { user, hasPermission } = useAuth()
@@ -76,6 +77,8 @@ const ProductosView = () => {
   const [expandedRow, setExpandedRow] = useState(null)
   const [ubicacionesPorProducto, setUbicacionesPorProducto] = useState({})
   const [loadingUbicaciones, setLoadingUbicaciones] = useState({})
+  const [ubicacionesOpen, setUbicacionesOpen] = useState(false)
+  const [productoSeleccionado, setProductoSeleccionado] = useState(null)
   
   const router = useRouter()
 
@@ -91,14 +94,59 @@ const ProductosView = () => {
   setLoading(true)
   try {
     const data = await productosService.getAll()
-    console.log('🟢 Productos recibidos en ProductosView:', data.map(p => ({
-      nombre: p.nombre,
-      stock_actual: p.stock_actual,
-      stock_fisico: p.stock_fisico
+    console.log('🟢 Productos recibidos:', data.map(p => ({ codigo: p.codigo, nombre: p.nombre })))
+    
+    // Cargar ubicaciones para todos los productos
+    const ubicacionesPromises = data.map(async (producto) => {
+      try {
+        const ubicacionesData = await productosService.getProductoConUbicaciones(producto.codigo)
+        console.log(`📍 ${producto.codigo} - ${producto.nombre}:`, {
+          total_ubicaciones: ubicacionesData.total_ubicaciones,
+          stock_por_ubicacion: ubicacionesData.stock_por_ubicacion?.length
+        })
+        return {
+          codigo: producto.codigo,
+          tieneUbicaciones: ubicacionesData?.total_ubicaciones > 0,
+          totalUbicaciones: ubicacionesData?.total_ubicaciones || 0,
+          stock_por_ubicacion: ubicacionesData?.stock_por_ubicacion || []
+        }
+      } catch (error) {
+        console.error(`Error con ${producto.codigo}:`, error)
+        return {
+          codigo: producto.codigo,
+          tieneUbicaciones: false,
+          totalUbicaciones: 0,
+          stock_por_ubicacion: []
+        }
+      }
+    })
+    
+    const ubicacionesInfo = await Promise.all(ubicacionesPromises)
+    console.log('📍 UbicacionesInfo:', ubicacionesInfo)
+    
+    // Actualizar productos con información de ubicaciones
+    const productosConUbicaciones = data.map(producto => {
+      const ubicInfo = ubicacionesInfo.find(u => u.codigo === producto.codigo)
+      console.log(`📦 ${producto.codigo}: tieneUbicaciones=${ubicInfo?.tieneUbicaciones}, total=${ubicInfo?.totalUbicaciones}`)
+      return {
+        ...producto,
+        tiene_ubicaciones: ubicInfo?.tieneUbicaciones || false,
+        ubicaciones_count: ubicInfo?.totalUbicaciones || 0,
+        ubicaciones_detalle: ubicInfo?.stock_por_ubicacion || []
+      }
+    })
+    
+    console.log('📦 Productos finales:', productosConUbicaciones.map(p => ({
+      codigo: p.codigo,
+      tiene_ubicaciones: p.tiene_ubicaciones,
+      ubicaciones_count: p.ubicaciones_count
     })))
-    setProductos(data)
-    setFilteredProductos(data)
+    
+    setProductos(productosConUbicaciones)
+    setFilteredProductos(productosConUbicaciones)
+    
   } catch (error) {
+    console.error('Error en cargarProductos:', error)
     setSnackbar({ open: true, message: 'Error al cargar productos', severity: 'error' })
   } finally {
     setLoading(false)
@@ -106,14 +154,26 @@ const ProductosView = () => {
 }
 
   const cargarUbicacionesProducto = async (productoId) => {
-    if (ubicacionesPorProducto[productoId]) return // Ya cargado
-    
-     setLoadingUbicaciones(prev => ({ ...prev, [productoId]: true }))
+  if (ubicacionesPorProducto[productoId]) return
+  
+  setLoadingUbicaciones(prev => ({ ...prev, [productoId]: true }))
   try {
     const data = await productosService.getProductoConUbicaciones(productoId)
-    // ✅ Agregar validación para evitar error cuando data es null
+    
     if (data && data.stock_por_ubicacion) {
       setUbicacionesPorProducto(prev => ({ ...prev, [productoId]: data.stock_por_ubicacion }))
+      
+      // ✅ Actualizar el producto para marcar que tiene ubicaciones
+      setProductos(prev => prev.map(p => 
+        p.codigo === productoId 
+          ? { ...p, tiene_ubicaciones: true, ubicaciones_count: data.total_ubicaciones }
+          : p
+      ))
+      setFilteredProductos(prev => prev.map(p => 
+        p.codigo === productoId 
+          ? { ...p, tiene_ubicaciones: true, ubicaciones_count: data.total_ubicaciones }
+          : p
+      ))
     } else {
       setUbicacionesPorProducto(prev => ({ ...prev, [productoId]: [] }))
     }
@@ -397,7 +457,7 @@ const ProductosView = () => {
                       
                       {/* Ubicación */}
                       <TableCell align="center">
-                        {tieneSinUbicacion ? (
+                        {!producto.tiene_ubicaciones ? (
                           <Chip
                             label="Sin ubicación"
                             color="warning"
@@ -406,7 +466,7 @@ const ProductosView = () => {
                           />
                         ) : (
                           <Chip
-                            label={`${ubicaciones.length} ubicación(es)`}
+                            label={`${producto.ubicaciones_count} ubicación(es)`}
                             color="info"
                             size="small"
                             icon={<LocationIcon />}
@@ -528,7 +588,10 @@ const ProductosView = () => {
                               size="small"
                               variant="outlined"
                               startIcon={<LocationIcon />}
-                              onClick={() => router.push(`/inventario/productos/${producto.id}`)}
+                              onClick={() => {
+    setProductoSeleccionado(producto)
+    setUbicacionesOpen(true)
+  }}
                               sx={{ mt: 2 }}
                             >
                               Gestionar Ubicaciones
@@ -629,6 +692,17 @@ const ProductosView = () => {
           {snackbar.message}
         </Alert>
       </Snackbar>
+     {/* Modal de Gestionar Ubicaciones */}
+<GestionUbicaciones
+  open={ubicacionesOpen}
+  onClose={() => {
+    setUbicacionesOpen(false)
+    setProductoSeleccionado(null)
+  }}
+  producto={{ producto: productoSeleccionado }}
+  onActualizar={cargarProductos}
+/>
+
     </Container>
   )
 }

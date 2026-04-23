@@ -1,6 +1,7 @@
 // src/services/inventario/productos.service.js
 import api from '../api'
 import { reservasService } from './reservas.service'
+import { getSessionId } from './reservas.service'
 
 export const productosService = {
   async getAll() {
@@ -150,8 +151,13 @@ export const productosService = {
 
 async getProductoConUbicaciones(codigo) {
   try {
-    console.log(`🔵 Llamando a GET /productos/${codigo}/con-ubicaciones`)
-    const response = await api.get(`/productos/${codigo}/con-ubicaciones`)
+    const sessionId = getSessionId()
+    const response = await api.get(`/productos/${codigo}/con-ubicaciones`, {
+      params: { session_id: sessionId }
+    })
+    console.log(`🔵 Respuesta completa de ${codigo}:`, response.data)
+    console.log(`   total_ubicaciones: ${response.data?.total_ubicaciones}`)
+    console.log(`   stock_por_ubicacion: ${response.data?.stock_por_ubicacion?.length}`)
     return response.data
   } catch (error) {
     console.error('Error obteniendo producto con ubicaciones:', error)
@@ -179,9 +185,11 @@ async transferirStock(productoId, origen, destino, cantidad) {
 
 async crearUbicacion(productoId, ubicacion, cantidad = 0) {
   try {
+    console.log(`🔵 Creando ubicación: producto=${productoId}, ubicacion=${ubicacion}, cantidad=${cantidad}`)
     const response = await api.post(`/productos/${productoId}/ubicaciones`, null, {
       params: { ubicacion, cantidad }
     })
+    console.log('✅ Ubicación creada:', response.data)
     return response.data
   } catch (error) {
     console.error('Error creando ubicación:', error)
@@ -208,6 +216,23 @@ async eliminarUbicacion(productoId, ubicacion) {
   } catch (error) {
     console.error('Error eliminando ubicación:', error)
     throw error
+  }
+}, 
+async getStockPorUbicacion(codigo, sessionId = null) {
+  try {
+    const sessionIdActual = sessionId || getSessionId()
+    const response = await api.get(`/productos/${codigo}/stock-por-ubicacion`, {
+      params: { session_id: sessionIdActual }
+    })
+    return response.data
+  } catch (error) {
+    console.error('Error obteniendo stock por ubicación:', error)
+    return {
+      producto: null,
+      stock_por_ubicacion: [],
+      stock_total_disponible: 0,
+      tiene_stock: false
+    }
   }
 }
 }

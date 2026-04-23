@@ -1,3 +1,4 @@
+//src/views/apps/inventario/DetalleProductoView.js
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import {
