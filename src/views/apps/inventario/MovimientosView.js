@@ -51,7 +51,8 @@ import {
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
   TrendingFlat as TrendingFlatIcon,
-  QrCode as QrCodeIcon
+  QrCode as QrCodeIcon,
+  ShoppingBag as KitIcon
 } from '@mui/icons-material'
 import CloseIcon from '@mui/icons-material/Close'
 import { useAuth } from 'src/hooks/useAuth'
@@ -353,17 +354,52 @@ const MovimientosView = () => {
   }
 
   const getTipoChip = (tipo) => {
-    const isEntrada = tipo === 'entrada'
+  if (tipo === 'entrada') {
     return (
       <Chip
-        icon={isEntrada ? <ArrowDownIcon /> : <ArrowUpIcon />}
-        label={isEntrada ? 'Entrada' : 'Salida'}
+        icon={<ArrowDownIcon />}
+        label="Entrada"
         size="small"
-        color={isEntrada ? 'success' : 'warning'}
+        color="success"
         sx={{ fontWeight: 500 }}
       />
     )
   }
+  if (tipo === 'salida') {
+    return (
+      <Chip
+        icon={<ArrowUpIcon />}
+        label="Salida"
+        size="small"
+        color="warning"
+        sx={{ fontWeight: 500 }}
+      />
+    )
+  }
+  if (tipo === 'creacion_ubicacion') {
+    return (
+      <Chip
+        icon={<LocationIcon />}
+        label="Creación Ubicación"
+        size="small"
+        color="info"
+        sx={{ fontWeight: 500 }}
+      />
+    )
+  }
+  if (tipo === 'transferencia_ubicacion') {
+    return (
+      <Chip
+        icon={<SwapHorizIcon />}
+        label="Transferencia"
+        size="small"
+        color="default"
+        sx={{ fontWeight: 500 }}
+      />
+    )
+  }
+  return <Chip label={tipo} size="small" />
+}
 
   const getBalanceColor = (balance) => {
     if (balance > 0) return 'success.main'
@@ -677,13 +713,41 @@ const MovimientosView = () => {
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2" fontWeight="medium">
-                        {mov.producto?.nombre || 'Producto eliminado'}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {mov.producto?.codigo || 'N/A'}
-                      </Typography>
-                    </TableCell>
+  {mov.es_kit ? (
+    <>
+      <Tooltip title={
+        <Box>
+          <Typography variant="caption" fontWeight="bold">Productos del kit:</Typography>
+          {mov.productos_kit?.map((p, idx) => (
+            <Typography key={idx} variant="caption" display="block">
+              • {p.producto_nombre}: {p.cantidad} unidades
+            </Typography>
+          ))}
+        </Box>
+      }>
+        <Chip 
+          icon={<KitIcon />} 
+          label={mov.kit_nombre} 
+          size="small" 
+          variant="outlined"
+          sx={{ cursor: 'pointer' }}
+        />
+      </Tooltip>
+      <Typography variant="caption" display="block" color="text.secondary">
+        {mov.productos_kit?.length} productos
+      </Typography>
+    </>
+  ) : (
+    <>
+      <Typography variant="body2" fontWeight="medium">
+        {mov.producto?.nombre || 'Producto eliminado'}
+      </Typography>
+      <Typography variant="caption" color="text.secondary">
+        {mov.producto?.codigo || 'N/A'}
+      </Typography>
+    </>
+  )}
+</TableCell>
                     <TableCell>{getTipoChip(mov.tipo)}</TableCell>
                     <TableCell align="right">
                       <Typography 
@@ -918,9 +982,40 @@ const MovimientosView = () => {
                   <Typography variant="body1">{movimientoSeleccionado.ubicacion || 'No especificada'}</Typography>
                 </Grid>
               </Grid>
-              
-              <Divider sx={{ my: 2 }} />
-              
+               {movimientoSeleccionado.es_kit && (
+          <>
+            <Divider sx={{ my: 2 }} />
+            <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>
+              📦 Productos del Kit
+            </Typography>
+            <TableContainer component={Paper} variant="outlined" sx={{ mb: 2 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: 'grey.50' }}>
+                    <TableCell>Producto</TableCell>
+                    <TableCell>Código</TableCell>
+                    <TableCell align="right">Cantidad</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {movimientoSeleccionado.productos_kit?.map((p, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell>{p.producto_nombre}</TableCell>
+                      <TableCell>{p.producto_codigo || p.producto_id}</TableCell>
+                      <TableCell align="right">{p.cantidad}</TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow sx={{ bgcolor: 'grey.50' }}>
+                    <TableCell colSpan={2}><strong>Total kit</strong></TableCell>
+                    <TableCell align="right">
+                      <strong>{movimientoSeleccionado.productos_kit?.reduce((sum, p) => sum + p.cantidad, 0)} unidades</strong>
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </>
+        )}
               {/* Notas */}
               <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>
                 Notas y Observaciones
