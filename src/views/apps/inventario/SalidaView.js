@@ -1,3 +1,5 @@
+//src/views/apps/inventario/SalidaView.js
+
 import { useState, useEffect } from 'react'
 import {
   Container,
@@ -91,14 +93,15 @@ const SalidaView = () => {
   
   // Formulario
   const [formData, setFormData] = useState({
-    motivo: 'Entrega de Ayudas',
-    cantidad: 1,
-    cliente: '',
-    kitNombre: '',
-    cantidadKits: 1,
-    notas: '',
-    fecha: new Date().toISOString().slice(0, 16)
-  })
+  motivo: 'Entrega de Ayudas',
+  cantidad: 1,
+  cliente: '',
+  kitNombre: '',
+  cantidadKits: 1,
+  notas: '',
+  referencia: '',  // ✅ AGREGAR ESTA LÍNEA
+  fecha: new Date().toISOString().slice(0, 16)
+})
 
   // Formulario de edición
   const [editFormData, setEditFormData] = useState({
@@ -115,7 +118,9 @@ const SalidaView = () => {
 
   const motivos = [
     'Entrega de Ayudas',           // Modo KIT (con cantidad de kits)
-    'Entrega de Ayudas/Unidades',  // Modo MULTIPRODUCTO (sin kits)
+    'Entrega de Ayudas/Unidades',  // Modo MULTIPRODUCTO
+    'Mercado Básico',              // NUEVO - Mercado predefinido básico
+    'Mercado Grande',              // NUEVO - Mercado predefinido grande
     'Consumo Interno',
     'Dañado',
     'Caducado',
@@ -123,7 +128,8 @@ const SalidaView = () => {
     'Transferencia',
     'Otro'
   ]
-  
+ 
+
 const cargarUbicacionesProducto = async (productoId) => {
   try {
     const sessionId = getSessionId()
@@ -168,12 +174,84 @@ const cargarUbicacionesProducto = async (productoId) => {
   const isModoKit = formData.motivo === 'Entrega de Ayudas'                    
   const isModoAyudasUnidades = formData.motivo === 'Entrega de Ayudas/Unidades' 
   const isModoNormal = !isModoKit && !isModoAyudasUnidades                     
+  const isModoMercadoBasico = formData.motivo === 'Mercado Básico'
+  const isModoMercadoGrande = formData.motivo === 'Mercado Grande'
+  const isModoMercado = isModoMercadoBasico || isModoMercadoGrande
+
 
   // Cargar historial al iniciar
   useEffect(() => {
     cargarUltimasSalidas()
     cargarReservaPendiente()
   }, [])
+  
+  // Función para crear salida de mercado predefinido
+const handleCrearSalidaMercado = async () => {
+  if (!formData.cliente.trim()) {
+    setSnackbar({ open: true, message: '❌ Ingresa el nombre del beneficiario', severity: 'error' })
+    return
+  }
+  
+  setLoading(true)
+  try {
+    const mercadoNombre = isModoMercadoBasico ? 'MERCADO_BASICO' : 'MERCADO_GRANDE'
+    const cantidadKits = formData.cantidadKits || 1
+    
+    const response = await fetch('http://localhost:8000/api/movimientos/salida-por-mercado', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mercado_nombre: mercadoNombre,
+        cantidad: cantidadKits,
+        cliente: formData.cliente,
+        notas: formData.notas,
+        referencia: formData.referencia || ''
+      })
+    })
+    
+    if (response.ok) {
+      // Descargar el PDF
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      
+      // Obtener el número de remisión del header
+      const remision = response.headers.get('X-Remision') || 'desconocido'
+      link.download = `comprobante_mercado_${remision}.pdf`
+      
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+      
+      setSnackbar({ 
+        open: true, 
+        message: `✅ ${cantidadKits} kit(s) de ${isModoMercadoBasico ? 'Mercado Básico' : 'Mercado Grande'} registrado(s). Remisión: ${remision}`, 
+        severity: 'success' 
+      })
+      
+      handleClearForm()
+      cargarUltimasSalidas()
+      
+    } else {
+      const errorData = await response.json()
+      let mensaje = `❌ Error: ${errorData.error || 'Error desconocido'}`
+      if (errorData.detalles) {
+        mensaje += '\n\n' + errorData.detalles.map(d => `• ${d.producto_nombre}: necesita ${d.necesario}, disponible: ${d.disponible}`).join('\n')
+        alert(mensaje)
+      } else {
+        setSnackbar({ open: true, message: mensaje, severity: 'error' })
+      }
+    }
+  } catch (error) {
+    console.error('Error:', error)
+    setSnackbar({ open: true, message: 'Error al registrar salida del mercado', severity: 'error' })
+  } finally {
+    setLoading(false)
+  }
+}
+
 
   const cargarReservaPendiente = async () => {
   try {
@@ -458,20 +536,21 @@ const handleSelectProduct = async (producto) => {
   }
 
   const handleClearForm = () => {
-    setProductoSeleccionado(null)
-    setProductosKit([])
-    setFormData({
-      motivo: 'Entrega de Ayudas',
-      cantidad: 1,
-      cliente: '',
-      kitNombre: '',
-      cantidadKits: 1,
-      notas: '',
-      fecha: new Date().toISOString().slice(0, 16)
-    })
-    setSearchTerm('')
-    setShowSearchResults(false)
-  }
+  setProductoSeleccionado(null)
+  setProductosKit([])
+  setFormData({
+    motivo: 'Entrega de Ayudas',
+    cantidad: 1,
+    cliente: '',
+    kitNombre: '',
+    cantidadKits: 1,
+    notas: '',
+    referencia: '',  // ✅ AGREGAR ESTA LÍNEA
+    fecha: new Date().toISOString().slice(0, 16)
+  })
+  setSearchTerm('')
+  setShowSearchResults(false)
+}
 
   const verificarStock = () => {
     if (!productoSeleccionado) return { valido: true, mensaje: '' }
@@ -1626,144 +1705,156 @@ const itemsParaReserva = [{
             
             <Divider sx={{ my: 3 }} />
             
-            {/* Detalles de la Salida */}
-            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              ✏️ Detalles de la Salida
-            </Typography>
-            
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  select
-                  label="Motivo de Salida *"
-                  value={formData.motivo}
-                  onChange={(e) => {
-                    setFormData({ ...formData, motivo: e.target.value })
-                    // Limpiar productos al cambiar de modo
-                    setProductosKit([])
-                    setProductoSeleccionado(null)
-                  }}
-                >
-                  {motivos.map((m) => (
-                    <MenuItem key={m} value={m}>{m}</MenuItem>
-                  ))}
-                </TextField>
-              </Grid>
-              
-              {isModoNormal && (
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    type="number"
-                    label="Cantidad *"
-                    value={formData.cantidad}
-                    onChange={(e) => {
-                      const value = e.target.value
-                      setFormData(prev => ({ ...prev, cantidad: value === '' ? '' : Number(value) }))
-                    }}
-                    onBlur={() => {
-                      if (!formData.cantidad || formData.cantidad <= 0) {
-                        setFormData(prev => ({ ...prev, cantidad: 1 }))
-                      }
-                    }}
-                    inputProps={{ min: 1, step: 1 }}
-                    error={!stockCheck.valido}
-                    helperText={!stockCheck.valido ? stockCheck.mensaje : `Stock disponible: ${productoSeleccionado?.stock_actual || 0}`}
-                  />
-                </Grid>
-              )}
-              
-              {isModoKit && (
-                <>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      label="Nombre del Kit/Mercado *"
-                      value={formData.kitNombre}
-                      onChange={(e) => setFormData({ ...formData, kitNombre: e.target.value })}
-                      placeholder="Ej: Mercado Básico, Kit Emergencia, Ayuda Familiar"
-                    />
-                  </Grid>
-                  <Grid item xs={12}>
-                    <TextField
-                      fullWidth
-                      type="number"
-                      label="Cantidad de Kits *"
-                      value={formData.cantidadKits === 0 ? '' : formData.cantidadKits}
-                      onChange={(e) => {
-                        const value = e.target.value
-                        if (value === '') {
-                          setFormData(prev => ({ ...prev, cantidadKits: '' }))
-                        } else {
-                          const numValue = parseInt(value, 10)
-                          if (!isNaN(numValue) && numValue > 0) {
-                            handleUpdateCantidadKits(value)
-                          }
-                        }
-                      }}
-                      onBlur={() => {
-                        if (!formData.cantidadKits || formData.cantidadKits <= 0) {
-                          setFormData(prev => ({ ...prev, cantidadKits: 1 }))
-                        }
-                      }}
-                      inputProps={{ min: 1, step: 1 }}
-                    />
-                  </Grid>
-                </>
-              )}
-              
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Cliente/Destino/Beneficiario"
-                  value={formData.cliente}
-                  onChange={(e) => setFormData({ ...formData, cliente: e.target.value })}
-                  placeholder={isModoKit || isModoAyudasUnidades ? "Nombre del beneficiario *" : "Nombre del cliente o destino..."}
-                  required={isModoKit || isModoAyudasUnidades}
-                />
-              </Grid>
-              
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={3}
-                  label="Notas Adicionales"
-                  value={formData.notas}
-                  onChange={(e) => setFormData({ ...formData, notas: e.target.value })}
-                  placeholder="Observaciones, número de factura, etc."
-                />
-              </Grid>
-              
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  type="datetime-local"
-                  label="Fecha de Salida"
-                  value={formData.fecha}
-                  onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
-                />
-              </Grid>
-            </Grid>
-            
-            <Box sx={{ display: 'flex', gap: 2, mt: 3 }}>
-              <Button
-                variant="contained"
-                color="warning"
-                startIcon={<AddIcon />}
-                onClick={handleAgregarALista}
-                disabled={hayErroresStock() || 
-                  (isModoNormal && !productoSeleccionado) || 
-                  ((isModoKit || isModoAyudasUnidades) && productosKit.length === 0) ||
-                  (isModoKit && !formData.kitNombre)}
-              >
-                Agregar a la Lista
-              </Button>
-              <Button variant="outlined" onClick={handleClearForm}>
-                Limpiar
-              </Button>
-            </Box>
+           {/* Detalles de la Salida */}
+<Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+  ✏️ Detalles de la Salida
+</Typography>
+
+<Grid container spacing={2}>
+  <Grid item xs={12}>
+    <TextField
+      fullWidth
+      select
+      label="Motivo de Salida *"
+      value={formData.motivo}
+      onChange={(e) => {
+        setFormData({ ...formData, motivo: e.target.value })
+        setProductosKit([])
+        setProductoSeleccionado(null)
+      }}
+    >
+      {motivos.map((m) => (
+        <MenuItem key={m} value={m}>{m}</MenuItem>
+      ))}
+    </TextField>
+  </Grid>
+  
+  {isModoNormal && (
+    <Grid item xs={12}>
+      <TextField
+        fullWidth
+        type="number"
+        label="Cantidad *"
+        value={formData.cantidad}
+        onChange={(e) => {
+          const value = e.target.value
+          setFormData(prev => ({ ...prev, cantidad: value === '' ? '' : Number(value) }))
+        }}
+        onBlur={() => {
+          if (!formData.cantidad || formData.cantidad <= 0) {
+            setFormData(prev => ({ ...prev, cantidad: 1 }))
+          }
+        }}
+        inputProps={{ min: 1, step: 1 }}
+        error={!stockCheck.valido}
+        helperText={!stockCheck.valido ? stockCheck.mensaje : `Stock disponible: ${productoSeleccionado?.stock_actual || 0}`}
+      />
+    </Grid>
+  )}
+  
+  {isModoKit && (
+    <>
+      <Grid item xs={12}>
+        <TextField
+          fullWidth
+          label="Nombre del Kit/Mercado *"
+          value={formData.kitNombre}
+          onChange={(e) => setFormData({ ...formData, kitNombre: e.target.value })}
+          placeholder="Ej: Mercado Básico, Kit Emergencia, Ayuda Familiar"
+        />
+      </Grid>
+      <Grid item xs={12}>
+        <TextField
+          fullWidth
+          type="number"
+          label="Cantidad de Kits *"
+          value={formData.cantidadKits === 0 ? '' : formData.cantidadKits}
+          onChange={(e) => {
+            const value = e.target.value
+            if (value === '') {
+              setFormData(prev => ({ ...prev, cantidadKits: '' }))
+            } else {
+              const numValue = parseInt(value, 10)
+              if (!isNaN(numValue) && numValue > 0) {
+                handleUpdateCantidadKits(value)
+              }
+            }
+          }}
+          onBlur={() => {
+            if (!formData.cantidadKits || formData.cantidadKits <= 0) {
+              setFormData(prev => ({ ...prev, cantidadKits: 1 }))
+            }
+          }}
+          inputProps={{ min: 1, step: 1 }}
+        />
+      </Grid>
+    </>
+  )}
+  
+  <Grid item xs={12}>
+    <TextField
+      fullWidth
+      label="Cliente/Destino/Beneficiario"
+      value={formData.cliente}
+      onChange={(e) => setFormData({ ...formData, cliente: e.target.value })}
+      placeholder={isModoKit || isModoAyudasUnidades ? "Nombre del beneficiario *" : "Nombre del cliente o destino..."}
+      required={isModoKit || isModoAyudasUnidades}
+    />
+  </Grid>
+  
+  {/* ✅ CAMPO REFERENCIA - COLOCAR AQUÍ */}
+  <Grid item xs={12}>
+    <TextField
+      fullWidth
+      label="Referencia"
+      value={formData.referencia || ''}
+      onChange={(e) => setFormData({ ...formData, referencia: e.target.value })}
+      placeholder="Ej: Donación-001, Factura #123, Ayuda humanitaria"
+      helperText="Número de factura, donación o referencia externa"
+    />
+  </Grid>
+  
+  <Grid item xs={12}>
+    <TextField
+      fullWidth
+      multiline
+      rows={3}
+      label="Notas Adicionales"
+      value={formData.notas}
+      onChange={(e) => setFormData({ ...formData, notas: e.target.value })}
+      placeholder="Observaciones, número de factura, etc."
+    />
+  </Grid>
+  
+  <Grid item xs={12}>
+    <TextField
+      fullWidth
+      type="datetime-local"
+      label="Fecha de Salida"
+      value={formData.fecha}
+      onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
+    />
+  </Grid>
+</Grid>
+
+<Box sx={{ display: 'flex', gap: 2, mt: 3 }}>
+  <Button
+    variant="contained"
+    color="warning"
+    startIcon={<AddIcon />}
+    onClick={isModoMercado ? handleCrearSalidaMercado : handleAgregarALista}
+    disabled={hayErroresStock() || 
+      (isModoMercado && !formData.cliente) ||
+      (isModoNormal && !productoSeleccionado) || 
+      ((isModoKit || isModoAyudasUnidades) && productosKit.length === 0) ||
+      (isModoKit && !formData.kitNombre)}
+  >
+    {isModoMercado ? 'Registrar Mercado' : 'Agregar a la Lista'}
+  </Button>
+  <Button variant="outlined" onClick={handleClearForm}>
+    Limpiar
+  </Button>
+</Box>
           </Paper>
         </Grid>
         
