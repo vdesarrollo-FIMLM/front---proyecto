@@ -11,16 +11,18 @@ export const movimientosService = {
       if (filters.fecha_desde) params.append('fecha_desde', filters.fecha_desde)
       if (filters.fecha_hasta) params.append('fecha_hasta', filters.fecha_hasta)
       if (filters.motivo) params.append('motivo', filters.motivo)
+      if (filters.remision) params.append('remision', filters.remision)  // ← AGREGAR
+      if (filters.caso) params.append('caso', filters.caso) 
       
       const query = params.toString()
-      const url = query ? `/movimientos/?${query}` : '/movimientos/'
-      const response = await api.get(url)
-      return response.data
-    } catch (error) {
-      console.error('Error obteniendo movimientos:', error)
-      return []
-    }
-  },
+    const url = query ? `/movimientos/?${query}` : '/movimientos/'
+    const response = await api.get(url)
+    return response.data
+  } catch (error) {
+    console.error('Error obteniendo movimientos:', error)
+    return []
+  }
+},
 
   async getProductos() {
     try {

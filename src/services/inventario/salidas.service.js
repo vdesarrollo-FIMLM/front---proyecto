@@ -53,7 +53,17 @@ export const salidasService = {
       throw error
     }
   },
-
+  async generarComprobanteMultiple(salidas) {
+  try {
+    const response = await api.post('/movimientos/comprobante-multiple', { salidas }, {
+      responseType: 'blob'
+    })
+    return response.data
+  } catch (error) {
+    console.error('Error generando comprobante múltiple:', error)
+    throw error
+  }
+},
   async subirPDFFirmado(movimientoId, file) {
     try {
       const formData = new FormData()

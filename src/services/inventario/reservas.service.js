@@ -73,7 +73,20 @@ export const reservasService = {
       throw error
     }
   },
-
+  
+  async confirmarMultiples(salidas) {
+  try {
+    const sessionId = getSessionId()
+    const response = await api.post('/movimientos/reservas/confirmar-multiples', {
+      salidas,
+      session_id: sessionId
+    })
+    return response.data
+  } catch (error) {
+    console.error('Error confirmando múltiples:', error)
+    throw error
+  }
+},
   async getStockDisponible(productoId, forceRefresh = false) {
   try {
     const sessionId = getSessionId()

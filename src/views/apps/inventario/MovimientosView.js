@@ -52,7 +52,10 @@ import {
   TrendingDown as TrendingDownIcon,
   TrendingFlat as TrendingFlatIcon,
   QrCode as QrCodeIcon,
-  ShoppingBag as KitIcon
+  ShoppingBag as KitIcon,
+  LocationOn as LocationIcon,
+  SwapHoriz as SwapHorizIcon
+
 } from '@mui/icons-material'
 import CloseIcon from '@mui/icons-material/Close'
 import { useAuth } from 'src/hooks/useAuth'
@@ -591,7 +594,25 @@ const MovimientosView = () => {
               </Select>
             </FormControl>
           </Grid>
-          
+          <Grid item xs={12} sm={6} md={2}>
+  <TextField
+    fullWidth
+    size="small"
+    label="Número de Remisión"
+    value={filters.remision}
+    onChange={(e) => setFilters({ ...filters, remision: e.target.value })}
+  />
+</Grid>
+
+<Grid item xs={12} sm={6} md={2}>
+  <TextField
+    fullWidth
+    size="small"
+    label="Número de Caso"
+    value={filters.caso}
+    onChange={(e) => setFilters({ ...filters, caso: e.target.value })}
+  />
+</Grid>
           <Grid item xs={12} sm={6} md={1}>
             <Button
               fullWidth
@@ -692,9 +713,11 @@ const MovimientosView = () => {
                 <TableCell>Motivo</TableCell>
                 <TableCell>Proveedor/Cliente</TableCell>
                 <TableCell>Ubicación</TableCell>
-                <TableCell>Usuario</TableCell>
-                <TableCell align="center">PDF</TableCell>
-                <TableCell align="center">Acciones</TableCell>
+    <TableCell>RM</TableCell>        
+    <TableCell>Caso</TableCell>      
+    <TableCell>Usuario</TableCell>
+    <TableCell align="center">PDF</TableCell>
+    <TableCell align="center">Acciones</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -761,6 +784,8 @@ const MovimientosView = () => {
                     <TableCell>{mov.motivo || '-'}</TableCell>
                     <TableCell>{origenDestino || '-'}</TableCell>
                     <TableCell>{mov.ubicacion || '-'}</TableCell>
+                    <TableCell>{mov.remision || '-'}</TableCell>
+                    <TableCell>{mov.caso || '-'}</TableCell>
                     <TableCell>{mov.usuario || 'admin'}</TableCell>
                     <TableCell align="center">
                       {mov.tipo === 'salida' && (
