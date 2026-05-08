@@ -1,3 +1,5 @@
+//src/views/apps/inventario/SalidaView.js
+
 import { useState, useEffect } from 'react'
 import {
   Container,
@@ -123,10 +125,15 @@ const generarRMSecuencial = () => {
   kitNombre: '',
   cantidadKits: 1,
   notas: '',
+<<<<<<< HEAD
   fecha: new Date().toISOString().slice(0, 16),
   remision: '',  // ← AGREGAR
   caso: '',
   mercadoSeleccionado: ''  // ← AGREGAR
+=======
+  referencia: '',  // ✅ AGREGAR ESTA LÍNEA
+  fecha: new Date().toISOString().slice(0, 16)
+>>>>>>> 57cc1208e7e45d1c03831d942ae82ebef1193388
 })
 
   // Formulario de edición
@@ -144,8 +151,14 @@ const generarRMSecuencial = () => {
 
   const motivos = [
     'Entrega de Ayudas',           // Modo KIT (con cantidad de kits)
+<<<<<<< HEAD
     'Entrega de Ayudas/Unidades',
     'Mercado Predefinido',  
+=======
+    'Entrega de Ayudas/Unidades',  // Modo MULTIPRODUCTO
+    'Mercado Básico',              // NUEVO - Mercado predefinido básico
+    'Mercado Grande',              // NUEVO - Mercado predefinido grande
+>>>>>>> 57cc1208e7e45d1c03831d942ae82ebef1193388
     'Consumo Interno',
     'Dañado',
     'Caducado',
@@ -153,7 +166,8 @@ const generarRMSecuencial = () => {
     'Transferencia',
     'Otro'
   ]
-  
+ 
+
 const cargarUbicacionesProducto = async (productoId) => {
   try {
     const sessionId = getSessionId()
@@ -199,6 +213,7 @@ const cargarUbicacionesProducto = async (productoId) => {
 }
   const isModoKit = formData.motivo === 'Entrega de Ayudas'                    
   const isModoAyudasUnidades = formData.motivo === 'Entrega de Ayudas/Unidades' 
+<<<<<<< HEAD
   const isModoMercadoPredefinido = formData.motivo === 'Mercado Predefinido'    
   const isModoNormal = !isModoKit && !isModoAyudasUnidades && !isModoMercadoPredefinido
   
@@ -209,6 +224,13 @@ const cargarUbicacionesProducto = async (productoId) => {
   isModoMercadoPredefinido,
   isModoNormal
 })
+=======
+  const isModoNormal = !isModoKit && !isModoAyudasUnidades                     
+  const isModoMercadoBasico = formData.motivo === 'Mercado Básico'
+  const isModoMercadoGrande = formData.motivo === 'Mercado Grande'
+  const isModoMercado = isModoMercadoBasico || isModoMercadoGrande
+
+>>>>>>> 57cc1208e7e45d1c03831d942ae82ebef1193388
 
   // Cargar historial al iniciar
   useEffect(() => {
@@ -216,6 +238,7 @@ const cargarUbicacionesProducto = async (productoId) => {
     cargarReservaPendiente()
   }, [])
   
+<<<<<<< HEAD
   useEffect(() => {
   // Generar nuevo RM solo si no hay uno existente o si cambió el motivo
   if (!formData.remision) {
@@ -229,6 +252,75 @@ useEffect(() => {
     setFormData(prev => ({ ...prev, remision: generarRMSecuencial() }))
   }
 }, [formData.motivo, formData.kitNombre, formData.mercadoSeleccionado])
+=======
+  // Función para crear salida de mercado predefinido
+const handleCrearSalidaMercado = async () => {
+  if (!formData.cliente.trim()) {
+    setSnackbar({ open: true, message: '❌ Ingresa el nombre del beneficiario', severity: 'error' })
+    return
+  }
+  
+  setLoading(true)
+  try {
+    const mercadoNombre = isModoMercadoBasico ? 'MERCADO_BASICO' : 'MERCADO_GRANDE'
+    const cantidadKits = formData.cantidadKits || 1
+    
+    const response = await fetch('http://localhost:8000/api/movimientos/salida-por-mercado', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mercado_nombre: mercadoNombre,
+        cantidad: cantidadKits,
+        cliente: formData.cliente,
+        notas: formData.notas,
+        referencia: formData.referencia || ''
+      })
+    })
+    
+    if (response.ok) {
+      // Descargar el PDF
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      
+      // Obtener el número de remisión del header
+      const remision = response.headers.get('X-Remision') || 'desconocido'
+      link.download = `comprobante_mercado_${remision}.pdf`
+      
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+      
+      setSnackbar({ 
+        open: true, 
+        message: `✅ ${cantidadKits} kit(s) de ${isModoMercadoBasico ? 'Mercado Básico' : 'Mercado Grande'} registrado(s). Remisión: ${remision}`, 
+        severity: 'success' 
+      })
+      
+      handleClearForm()
+      cargarUltimasSalidas()
+      
+    } else {
+      const errorData = await response.json()
+      let mensaje = `❌ Error: ${errorData.error || 'Error desconocido'}`
+      if (errorData.detalles) {
+        mensaje += '\n\n' + errorData.detalles.map(d => `• ${d.producto_nombre}: necesita ${d.necesario}, disponible: ${d.disponible}`).join('\n')
+        alert(mensaje)
+      } else {
+        setSnackbar({ open: true, message: mensaje, severity: 'error' })
+      }
+    }
+  } catch (error) {
+    console.error('Error:', error)
+    setSnackbar({ open: true, message: 'Error al registrar salida del mercado', severity: 'error' })
+  } finally {
+    setLoading(false)
+  }
+}
+
+>>>>>>> 57cc1208e7e45d1c03831d942ae82ebef1193388
 
   const cargarReservaPendiente = async () => {
   try {
@@ -523,10 +615,15 @@ const handleSelectProduct = async (producto) => {
     kitNombre: '',
     cantidadKits: 1,
     notas: '',
+<<<<<<< HEAD
     fecha: new Date().toISOString().slice(0, 16),
     remision: generarRMSecuencial(),  // ← Generar RM aquí
     caso: '',
     mercadoSeleccionado: ''
+=======
+    referencia: '',  // ✅ AGREGAR ESTA LÍNEA
+    fecha: new Date().toISOString().slice(0, 16)
+>>>>>>> 57cc1208e7e45d1c03831d942ae82ebef1193388
   })
   setSearchTerm('')
   setShowSearchResults(false)
@@ -2024,6 +2121,7 @@ const handleConfirmarMultiples = async () => {
             
             <Divider sx={{ my: 3 }} />
             
+<<<<<<< HEAD
             {/* Detalles de la Salida */}
             <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               ✏️ Detalles de la Salida
@@ -2137,10 +2235,38 @@ const handleConfirmarMultiples = async () => {
       </TextField>
     </Grid>
     
+=======
+           {/* Detalles de la Salida */}
+<Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+  ✏️ Detalles de la Salida
+</Typography>
+
+<Grid container spacing={2}>
+  <Grid item xs={12}>
+    <TextField
+      fullWidth
+      select
+      label="Motivo de Salida *"
+      value={formData.motivo}
+      onChange={(e) => {
+        setFormData({ ...formData, motivo: e.target.value })
+        setProductosKit([])
+        setProductoSeleccionado(null)
+      }}
+    >
+      {motivos.map((m) => (
+        <MenuItem key={m} value={m}>{m}</MenuItem>
+      ))}
+    </TextField>
+  </Grid>
+  
+  {isModoNormal && (
+>>>>>>> 57cc1208e7e45d1c03831d942ae82ebef1193388
     <Grid item xs={12}>
       <TextField
         fullWidth
         type="number"
+<<<<<<< HEAD
         label="Cantidad de Mercados *"
         value={formData.cantidadKits}
         onChange={(e) => setFormData(prev => ({ ...prev, cantidadKits: parseInt(e.target.value) || 1 }))}
@@ -2263,6 +2389,129 @@ const handleConfirmarMultiples = async () => {
                 Limpiar
               </Button>
             </Box>
+=======
+        label="Cantidad *"
+        value={formData.cantidad}
+        onChange={(e) => {
+          const value = e.target.value
+          setFormData(prev => ({ ...prev, cantidad: value === '' ? '' : Number(value) }))
+        }}
+        onBlur={() => {
+          if (!formData.cantidad || formData.cantidad <= 0) {
+            setFormData(prev => ({ ...prev, cantidad: 1 }))
+          }
+        }}
+        inputProps={{ min: 1, step: 1 }}
+        error={!stockCheck.valido}
+        helperText={!stockCheck.valido ? stockCheck.mensaje : `Stock disponible: ${productoSeleccionado?.stock_actual || 0}`}
+      />
+    </Grid>
+  )}
+  
+  {isModoKit && (
+    <>
+      <Grid item xs={12}>
+        <TextField
+          fullWidth
+          label="Nombre del Kit/Mercado *"
+          value={formData.kitNombre}
+          onChange={(e) => setFormData({ ...formData, kitNombre: e.target.value })}
+          placeholder="Ej: Mercado Básico, Kit Emergencia, Ayuda Familiar"
+        />
+      </Grid>
+      <Grid item xs={12}>
+        <TextField
+          fullWidth
+          type="number"
+          label="Cantidad de Kits *"
+          value={formData.cantidadKits === 0 ? '' : formData.cantidadKits}
+          onChange={(e) => {
+            const value = e.target.value
+            if (value === '') {
+              setFormData(prev => ({ ...prev, cantidadKits: '' }))
+            } else {
+              const numValue = parseInt(value, 10)
+              if (!isNaN(numValue) && numValue > 0) {
+                handleUpdateCantidadKits(value)
+              }
+            }
+          }}
+          onBlur={() => {
+            if (!formData.cantidadKits || formData.cantidadKits <= 0) {
+              setFormData(prev => ({ ...prev, cantidadKits: 1 }))
+            }
+          }}
+          inputProps={{ min: 1, step: 1 }}
+        />
+      </Grid>
+    </>
+  )}
+  
+  <Grid item xs={12}>
+    <TextField
+      fullWidth
+      label="Cliente/Destino/Beneficiario"
+      value={formData.cliente}
+      onChange={(e) => setFormData({ ...formData, cliente: e.target.value })}
+      placeholder={isModoKit || isModoAyudasUnidades ? "Nombre del beneficiario *" : "Nombre del cliente o destino..."}
+      required={isModoKit || isModoAyudasUnidades}
+    />
+  </Grid>
+  
+  {/* ✅ CAMPO REFERENCIA - COLOCAR AQUÍ */}
+  <Grid item xs={12}>
+    <TextField
+      fullWidth
+      label="Referencia"
+      value={formData.referencia || ''}
+      onChange={(e) => setFormData({ ...formData, referencia: e.target.value })}
+      placeholder="Ej: Donación-001, Factura #123, Ayuda humanitaria"
+      helperText="Número de factura, donación o referencia externa"
+    />
+  </Grid>
+  
+  <Grid item xs={12}>
+    <TextField
+      fullWidth
+      multiline
+      rows={3}
+      label="Notas Adicionales"
+      value={formData.notas}
+      onChange={(e) => setFormData({ ...formData, notas: e.target.value })}
+      placeholder="Observaciones, número de factura, etc."
+    />
+  </Grid>
+  
+  <Grid item xs={12}>
+    <TextField
+      fullWidth
+      type="datetime-local"
+      label="Fecha de Salida"
+      value={formData.fecha}
+      onChange={(e) => setFormData({ ...formData, fecha: e.target.value })}
+    />
+  </Grid>
+</Grid>
+
+<Box sx={{ display: 'flex', gap: 2, mt: 3 }}>
+  <Button
+    variant="contained"
+    color="warning"
+    startIcon={<AddIcon />}
+    onClick={isModoMercado ? handleCrearSalidaMercado : handleAgregarALista}
+    disabled={hayErroresStock() || 
+      (isModoMercado && !formData.cliente) ||
+      (isModoNormal && !productoSeleccionado) || 
+      ((isModoKit || isModoAyudasUnidades) && productosKit.length === 0) ||
+      (isModoKit && !formData.kitNombre)}
+  >
+    {isModoMercado ? 'Registrar Mercado' : 'Agregar a la Lista'}
+  </Button>
+  <Button variant="outlined" onClick={handleClearForm}>
+    Limpiar
+  </Button>
+</Box>
+>>>>>>> 57cc1208e7e45d1c03831d942ae82ebef1193388
           </Paper>
         </Grid>
         
