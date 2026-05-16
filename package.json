@@ -44,7 +44,7 @@
     "clsx": "1.2.1",
     "cors": "^2.8.6",
     "date-fns": "^2.30.0",
-    "draft-js": "0.11.7",
+    "draft-js": "^0.11.7",
     "draft-js-export-html": "^1.4.1",
     "express": "^5.2.1",
     "firebase": "^12.4.0",
@@ -53,21 +53,21 @@
     "html5-qrcode": "^2.3.8",
     "i18next": "^22.5.1",
     "i18next-browser-languagedetector": "^7.1.0",
-    "i18next-http-backend": "^2.3.1",
+    "i18next-http-backend": "^4.0.0",
     "jodit-react": "^5.2.37",
     "js-cookie": "^3.0.5",
     "jscanify": "^1.4.0",
     "keen-slider": "6.8.3",
     "mongoose": "^9.3.3",
-    "next": "^16.0.10",
+    "next": "^15.5.18",
     "next-auth": "^4.24.13",
     "nprogress": "0.2.0",
     "prismjs": "^1.30.0",
-    "react": "^19.2.3",
+    "react": "^19.2.6",
     "react-apexcharts": "1.4.0",
     "react-chartjs-2": "^5.3.1",
     "react-datepicker": "4.8.0",
-    "react-dom": "^19.2.3",
+    "react-dom": "^19.2.6",
     "react-dropzone": "^14.4.1",
     "react-hook-form": "7.38.0",
     "react-hot-toast": "2.4.0",
@@ -105,6 +105,12 @@
     },
     "multimatch": {
       "minimatch": "^9.0.5"
+    },
+    "draft-js": {
+      "immutable": "^3.8.3"
+    },
+    "next": {
+      "postcss": "^8.5.10"
     }
   }
 }
